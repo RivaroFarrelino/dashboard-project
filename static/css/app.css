@@ -103,7 +103,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .search-item .small { margin-top: 2px; }
 .search-item mark { background: #fff1b8; color: inherit; border-radius: 3px; padding: 0 1px; }
 .search-kosong { padding: 16px 14px; color: var(--muted); }
-.search-list { padding-bottom: 6px; }
+.search-list { padding: 6px 0; }
 .kbd { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; line-height: 1; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; background: var(--surface-2); pointer-events: none; }
 .search input:focus ~ .kbd, .search input:not(:placeholder-shown) ~ .kbd { display: none; }
 
