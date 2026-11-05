@@ -147,14 +147,14 @@ function renderSo(rows) {
     <thead>
       <tr class="grp">
         <th class="g-so sticky" colspan="1"></th>
-        <th class="g-so" colspan="15">Sales Order</th>
+        <th class="g-so" colspan="16">Sales Order</th>
         <th class="g-omzet" colspan="${nOmzet + 2}">Omzet</th>
         <th class="g-komisi" colspan="6">Komisi</th>
         <th></th>
       </tr>
       <tr>
         <th class="sticky">Sales Order</th>
-        <th>Status</th><th>External Doc No</th><th>Company</th><th>TOP</th><th>Sales</th><th>Arsitek</th>
+        <th>Status</th><th>Order Date</th><th>External Doc No</th><th>Company</th><th>TOP</th><th>Sales</th><th>Arsitek</th>
         <th>Kontraktor</th><th>PMSM</th><th>Currency</th><th class="num">Total Kontrak</th><th class="num">Nilai SO</th>
         <th>Paid × Kontrak</th><th>FG Finish</th><th>Shipment</th><th>FG Tagih</th>
         <th class="sep">Tanggal</th>${omzetHead}<th class="num">Cash In</th>
@@ -171,6 +171,7 @@ function renderSo(rows) {
       <tr class="so-row" data-so="${esc(r.so_no)}">
         <td class="sticky"><span class="so-no">${PANAH}${esc(r.so_no)}</span></td>
         <td>${badgeSo(r)}</td>
+        <td>${tanggal(r.order_date)}</td>
         <td>${teks(r.external_document_no)}</td>
         <td>${teks(r.company)}</td>
         <td>${teks(r.top)}</td>
