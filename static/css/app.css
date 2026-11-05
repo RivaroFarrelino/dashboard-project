@@ -245,6 +245,10 @@ tr.redup td { color: var(--muted); }
 .search-sm input { height: 34px; font-size: 13px; }
 .tbl tfoot td { background: var(--surface-2); border-top: 1px solid var(--border); border-bottom: 0; }
 .tbl td.wrap { white-space: normal; min-width: 180px; }
+.omzet-sel .small { color: var(--muted); font-size: 11px; }
+.omzet-sel.ini { background: var(--accent-soft); font-weight: 600; }
+.omzet-sel.ini .small { color: var(--accent); }
+.omzet-sel.lain { color: var(--muted); }
 
 @media (max-width: 1280px) {
   .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
