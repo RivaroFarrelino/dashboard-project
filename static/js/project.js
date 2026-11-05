@@ -18,72 +18,127 @@ function tampilPesan(teksPesan) {
   el.hidden = !teksPesan;
 }
 
+const KUNCI_TERAKHIR = 'project_terakhir';
+
+function bacaTerakhir() {
+  try {
+    const v = JSON.parse(localStorage.getItem(KUNCI_TERAKHIR) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function simpanTerakhir(p) {
+  try {
+    const list = [p, ...bacaTerakhir().filter(x => x.kode !== p.kode)].slice(0, 5);
+    localStorage.setItem(KUNCI_TERAKHIR, JSON.stringify(list));
+  } catch (e) {
+    return;
+  }
+}
+
+function sorot(teksAsli, q) {
+  const t = String(teksAsli ?? '');
+  if (!t) return STRIP;
+  if (!q) return esc(t);
+  const i = t.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return esc(t);
+  return `${esc(t.slice(0, i))}<mark>${esc(t.slice(i, i + q.length))}</mark>${esc(t.slice(i + q.length))}`;
+}
+
 function setupCari() {
   const input = $('cari-project');
   const list = $('hasil-cari');
   let timer = null;
   let urut = 0;
   let pilihan = [];
+  let bagian = [];
   let aktif = -1;
+  let q = '';
 
   const tutup = () => { list.hidden = true; aktif = -1; };
 
   const render = () => {
+    pilihan = bagian.flatMap(b => b.items);
     if (!pilihan.length) {
-      list.innerHTML = '<div class="search-item muted">Tidak ada project yang cocok</div>';
-    } else {
-      list.innerHTML = pilihan.map((p, i) => `
-        <div class="search-item ${i === aktif ? 'aktif' : ''}" data-i="${i}">
-          <div><b>${esc(p.kode)}</b> · ${teks(p.nama)}</div>
-          <div class="small muted">${teks(p.customer)} · ${p.jml_so} SO</div>
-        </div>`).join('');
+      list.innerHTML = `<div class="search-kosong">${q ? `Tidak ada project yang cocok dengan “${esc(q)}”` : 'Ketik untuk mencari project'}</div>`;
+      list.hidden = false;
+      return;
     }
+    let i = 0;
+    list.innerHTML = bagian.filter(b => b.items.length).map(b => `
+      <div class="search-label">${b.judul}</div>
+      ${b.items.map(p => {
+        const idx = i++;
+        const soCocok = p.so_cocok ? `<span class="badge b-blue">${sorot(p.so_cocok, q)}</span>` : '';
+        return `
+          <div class="search-item ${idx === aktif ? 'aktif' : ''}" data-i="${idx}" role="option">
+            <div class="search-utama"><b>${sorot(p.kode, q)}</b><span>${sorot(p.nama, q)}</span>${soCocok}</div>
+            <div class="small muted">${sorot(p.customer, q)}${p.jml_so ? ` · ${p.jml_so} SO` : ''}</div>
+          </div>`;
+      }).join('')}`).join('');
     list.hidden = false;
+    const el = list.querySelector('.search-item.aktif');
+    if (el) el.scrollIntoView({ block: 'nearest' });
   };
 
-  const cari = async q => {
+  const cari = async kata => {
     const no = ++urut;
+    q = kata;
     try {
-      const data = await ambilJson(`/api/projects?q=${encodeURIComponent(q)}`);
+      const data = await ambilJson(`/api/projects?q=${encodeURIComponent(kata)}`);
       if (no !== urut) return;
-      pilihan = data;
-      aktif = -1;
+      aktif = kata ? 0 : -1;
+      bagian = kata
+        ? [{ judul: `Hasil pencarian (${data.length}${data.length >= 30 ? '+' : ''})`, items: data }]
+        : [{ judul: 'Terakhir dibuka', items: bacaTerakhir() }, { judul: 'Project terbaru', items: data.slice(0, 8) }];
       render();
     } catch (e) {
       if (no !== urut) return;
-      list.innerHTML = `<div class="search-item muted">${esc(e.message)}</div>`;
+      list.innerHTML = `<div class="search-kosong">${esc(e.message)}</div>`;
       list.hidden = false;
     }
   };
 
+  input.addEventListener('focus', () => cari(input.value.trim()));
+
   input.addEventListener('input', () => {
     clearTimeout(timer);
-    const q = input.value.trim();
-    if (q.length < 2) { tutup(); return; }
-    timer = setTimeout(() => cari(q), 250);
+    timer = setTimeout(() => cari(input.value.trim()), 200);
   });
 
   input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { tutup(); input.blur(); return; }
     if (list.hidden || !pilihan.length) return;
     if (e.key === 'ArrowDown') { aktif = (aktif + 1) % pilihan.length; render(); e.preventDefault(); }
     else if (e.key === 'ArrowUp') { aktif = (aktif - 1 + pilihan.length) % pilihan.length; render(); e.preventDefault(); }
-    else if (e.key === 'Enter') { const p = pilihan[aktif < 0 ? 0 : aktif]; if (p) { pilih(p.kode); } e.preventDefault(); }
-    else if (e.key === 'Escape') { tutup(); }
+    else if (e.key === 'Enter') { const p = pilihan[aktif < 0 ? 0 : aktif]; if (p) pilih(p); e.preventDefault(); }
   });
 
   list.addEventListener('mousedown', e => {
     const item = e.target.closest('[data-i]');
-    if (item) pilih(pilihan[Number(item.dataset.i)].kode);
+    if (item) pilih(pilihan[Number(item.dataset.i)]);
+    e.preventDefault();
   });
 
-  input.addEventListener('blur', () => setTimeout(tutup, 150));
+  input.addEventListener('blur', () => setTimeout(tutup, 120));
 
-  function pilih(kode) {
+  document.addEventListener('keydown', e => {
+    const ketik = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+    if ((e.key === '/' && !ketik) || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) {
+      e.preventDefault();
+      input.focus();
+    }
+  });
+
+  function pilih(p) {
+    simpanTerakhir({ kode: p.kode, nama: p.nama, customer: p.customer, jml_so: p.jml_so });
     tutup();
     input.value = '';
     input.blur();
-    history.pushState({ kode }, '', `/project?kode=${encodeURIComponent(kode)}`);
-    muatProject(kode);
+    history.pushState({ kode: p.kode }, '', `/project?kode=${encodeURIComponent(p.kode)}`);
+    muatProject(p.kode);
   }
 }
 
