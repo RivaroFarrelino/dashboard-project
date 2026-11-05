@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Project{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Project</h1>
+    <p class="muted">Perjalanan project dari Sales Order sampai lunas</p>
+  </div>
+  <div class="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="cari-project" type="search" autocomplete="off" placeholder="Cari kode project, nama, customer, atau no SO">
+    <div class="search-list" id="hasil-cari" hidden></div>
+  </div>
+</header>
+
+<section id="kosong" class="empty">
+  <div class="empty-icon">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+  </div>
+  <h2>Pilih project</h2>
+  <p class="muted">Ketik kode project, nama project, nama customer, atau nomor SO di kotak pencarian.</p>
+</section>
+
+<section id="pesan" class="alert" hidden></section>
+
+<section id="project-view" hidden>
+  <div class="card project-info">
+    <div class="project-title">
+      <span class="chip" id="p-kode"></span>
+      <h2 id="p-nama"></h2>
+    </div>
+    <dl class="info-grid">
+      <div><dt>Customer</dt><dd id="p-customer"></dd></div>
+      <div><dt>Alamat</dt><dd id="p-alamat"></dd></div>
+      <div><dt>Sales Order</dt><dd id="p-jml-so"></dd></div>
+    </dl>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="card kpi"><div class="kpi-label">Total Kontrak</div><div class="kpi-value" id="k-kontrak"></div></div>
+    <div class="card kpi"><div class="kpi-label">Proforma Created</div><div class="kpi-value" id="k-pi"></div><div class="kpi-sub" id="k-pi-pct"></div></div>
+    <div class="card kpi"><div class="kpi-label">Paid</div><div class="kpi-value" id="k-paid"></div><div class="kpi-sub" id="k-paid-pct"></div></div>
+    <div class="card kpi"><div class="kpi-label">Invoice Created</div><div class="kpi-value" id="k-inv"></div><div class="kpi-sub" id="k-ots"></div></div>
+    <div class="card kpi"><div class="kpi-label">FG Finish</div><div class="kpi-value" id="k-fg"></div><div class="bar"><span id="k-fg-bar"></span></div></div>
+    <div class="card kpi"><div class="kpi-label">Shipment</div><div class="kpi-value" id="k-ship"></div><div class="bar"><span id="k-ship-bar"></span></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3>Sales Order</h3>
+      <span class="muted small">Klik baris untuk melihat sales lines</span>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl tbl-so" id="tbl-so"></table>
+    </div>
+  </div>
+</section>
+
+<div class="modal" id="modal-dokumen" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h3>Proforma &amp; Invoice</h3>
+        <div class="muted small" id="m-judul"></div>
+      </div>
+      <button class="btn-icon" data-tutup aria-label="Tutup">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="mini-kpi" id="m-kpi"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="proforma">Proforma <span id="m-n-pi"></span></button>
+        <button class="tab" data-tab="invoice">Invoice <span id="m-n-inv"></span></button>
+        <label class="check" id="m-filter-wrap" hidden><input type="checkbox" id="m-semua"> Tampilkan realisasi DP</label>
+      </div>
+      <div class="table-wrap" data-panel="proforma"><table class="tbl" id="tbl-pi"></table></div>
+      <div class="table-wrap" data-panel="invoice" hidden><table class="tbl" id="tbl-inv"></table></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/project.js') }}"></script>
+{% endblock %}
