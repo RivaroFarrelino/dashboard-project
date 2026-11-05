@@ -68,7 +68,6 @@ function setupCari() {
     }
     let i = 0;
     list.innerHTML = bagian.filter(b => b.items.length).map(b => `
-      <div class="search-label">${b.judul}</div>
       ${b.items.map(p => {
         const idx = i++;
         const soCocok = p.so_cocok ? `<span class="badge b-blue">${sorot(p.so_cocok, q)}</span>` : '';
@@ -90,9 +89,9 @@ function setupCari() {
       const data = await ambilJson(`/api/projects?q=${encodeURIComponent(kata)}`);
       if (no !== urut) return;
       aktif = kata ? 0 : -1;
-      bagian = kata
-        ? [{ judul: `Hasil pencarian (${data.length}${data.length >= 30 ? '+' : ''})`, items: data }]
-        : [{ judul: 'Terakhir dibuka', items: bacaTerakhir() }, { judul: 'Project terbaru', items: data.slice(0, 8) }];
+      const terakhir = kata ? [] : bacaTerakhir();
+      const sudah = new Set(terakhir.map(p => p.kode));
+      bagian = [{ items: [...terakhir, ...data.filter(p => !sudah.has(p.kode)).slice(0, kata ? 30 : 8)] }];
       render();
     } catch (e) {
       if (no !== urut) return;
