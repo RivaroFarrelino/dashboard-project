@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Omzet</h1>
+    <p class="muted">Omzet per bulan: Omzet 1 di bulan bayar pertama, omzet berikutnya di bulan kontrak berubah</p>
+  </div>
+  <label class="select-wrap">
+    <span class="muted small">Bulan</span>
+    <select id="pilih-bulan"></select>
+  </label>
+</header>
+
+<section id="pesan" class="alert" hidden></section>
+
+<div class="kpi-grid kpi-5">
+  <div class="card kpi"><div class="kpi-label">Omzet bulan ini</div><div class="kpi-value" id="k-omzet">–</div><div class="kpi-sub" id="k-delta"></div></div>
+  <div class="card kpi"><div class="kpi-label">Jumlah omzet</div><div class="kpi-value" id="k-jml">–</div><div class="kpi-sub" id="k-jml-sub"></div></div>
+  <div class="card kpi"><div class="kpi-label">Rata-rata per omzet</div><div class="kpi-value" id="k-rata">–</div></div>
+  <div class="card kpi"><div class="kpi-label">Omzet tahun berjalan</div><div class="kpi-value" id="k-ytd">–</div><div class="kpi-sub" id="k-ytd-sub"></div></div>
+  <div class="card kpi"><div class="kpi-label">Sales dengan omzet</div><div class="kpi-value" id="k-sales">–</div><div class="kpi-sub" id="k-sales-sub"></div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head">
+      <h3>Omzet 12 bulan terakhir</h3>
+      <span class="muted small">Klik batang untuk pindah bulan</span>
+    </div>
+    <div class="chart" id="chart-bulan"></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <h3>Omzet per sales</h3>
+      <span class="muted small">Garis = batas omzet grup komisi</span>
+    </div>
+    <div class="sales-list" id="list-sales"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h3 id="judul-tabel">Daftar omzet</h3>
+    <div class="toolbar">
+      <div class="search search-sm">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="cari-omzet" type="search" placeholder="Cari SO, customer, project, sales">
+      </div>
+      <button class="btn-sm" id="unduh-csv">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Unduh CSV
+      </button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl" id="tbl-omzet"></table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/omzet.js') }}"></script>
+{% endblock %}
