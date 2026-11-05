@@ -107,7 +107,6 @@ async function muatProject(kode) {
 }
 
 function renderHeader(h) {
-  document.title = `${h.kode} · Project`;
   $('p-kode').textContent = h.kode;
   $('p-nama').textContent = h.nama || STRIP;
   $('p-customer').textContent = h.customer || STRIP;
