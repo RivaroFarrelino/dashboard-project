@@ -102,6 +102,7 @@ function setupCari() {
   };
 
   input.addEventListener('focus', () => cari(input.value.trim()));
+  input.addEventListener('click', () => { if (list.hidden) cari(input.value.trim()); });
 
   input.addEventListener('input', () => {
     clearTimeout(timer);
