@@ -1,6 +1,7 @@
 import hmac
 import logging
 import os
+import re
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -76,7 +77,7 @@ def page_project():
 
 @app.get("/omzet")
 def page_omzet():
-    return render_template("segera.html", active="omzet", judul="Omzet")
+    return render_template("omzet.html", active="omzet")
 
 
 @app.get("/penagihan-fg")
@@ -231,6 +232,39 @@ def api_so_dokumen(so_no):
         (so_no,),
     )
     return jsonify(so=so, proforma=proforma, invoice=invoice)
+
+
+@app.get("/api/omzet/bulan")
+def api_omzet_bulan():
+    rows = db.query(
+        "SELECT o.bulan, SUM(o.nilai) AS omzet, COUNT(*) AS jml "
+        "FROM v_omzet o JOIN bc_sales_header h ON h.no = o.so_no "
+        "WHERE h.brand = %s GROUP BY o.bulan ORDER BY o.bulan",
+        (BRAND,),
+    )
+    return jsonify(rows)
+
+
+@app.get("/api/omzet")
+def api_omzet():
+    bulan = request.args.get("bulan", "")
+    if not re.fullmatch(r"\d{4}-\d{2}", bulan):
+        return jsonify(pesan="Pilih bulan terlebih dahulu."), 400
+    rows = db.query(
+        "SELECT o.so_no, o.omzet_ke, o.tanggal, o.nilai, h.sell_to_customer_name AS customer, h.project_code, "
+        "h.project_name, h.contract_amount AS kontrak, h.sales_dim5 AS sales, h.arsitek_dim7 AS arsitek, "
+        "h.kontraktor_dim8 AS kontraktor, h.pmsm_dim6 AS pmsm "
+        "FROM v_omzet o JOIN bc_sales_header h ON h.no = o.so_no "
+        "WHERE h.brand = %s AND o.bulan = %s ORDER BY o.tanggal, o.so_no",
+        (BRAND, bulan),
+    )
+    sales = db.query(
+        "SELECT s.sales, s.omzet, s.jml, g.kode AS grup, g.aturan, g.batas_omzet "
+        "FROM v_omzet_sales s LEFT JOIN v_sales_grup g ON g.tahun = %s AND g.sales_dim5 = s.sales "
+        "WHERE s.brand = %s AND s.bulan = %s ORDER BY s.omzet DESC",
+        (int(bulan[:4]), BRAND, bulan),
+    )
+    return jsonify(bulan=bulan, rows=rows, sales=sales)
 
 
 if __name__ == "__main__":
