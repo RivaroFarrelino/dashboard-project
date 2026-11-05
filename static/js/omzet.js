@@ -96,13 +96,12 @@ function renderKpiDasar() {
 }
 
 function renderKpiDetail() {
-  const n = state.rows.length;
-  const total = state.rows.reduce((a, r) => a + Number(r.nilai), 0);
-  const so = new Set(state.rows.map(r => r.so_no)).size;
-  const baru = state.rows.filter(r => Number(r.omzet_ke) === 1).length;
-  $('k-jml').textContent = fmtAngka.format(n);
-  $('k-jml-sub').textContent = `${baru} omzet baru · ${n - baru} perubahan kontrak · ${so} SO`;
-  $('k-rata').innerHTML = n ? ringkas(total / n) : STRIP;
+  const ev = state.rows.flatMap(r => r.omzet.filter(o => o.bulan === state.pilih));
+  const total = ev.reduce((a, o) => a + Number(o.nilai), 0);
+  const baru = ev.filter(o => Number(o.ke) === 1).length;
+  $('k-jml').textContent = fmtAngka.format(ev.length);
+  $('k-jml-sub').textContent = `${baru} omzet baru · ${ev.length - baru} perubahan kontrak · ${state.rows.length} SO`;
+  $('k-rata').innerHTML = ev.length ? ringkas(total / ev.length) : STRIP;
   const adaGrup = state.sales.filter(s => s.grup);
   const capai = adaGrup.filter(s => Number(s.omzet) >= Number(s.batas_omzet)).length;
   $('k-sales').textContent = fmtAngka.format(state.sales.length);
@@ -197,25 +196,35 @@ function barisCocok(r, q) {
     .some(v => String(v ?? '').toLowerCase().includes(q));
 }
 
+const jumlahKolomOmzet = rows => Math.max(1, ...rows.map(r => r.omzet.length));
+
+function selOmzet(o) {
+  if (!o) return `<td class="num muted">${STRIP}</td>`;
+  const ini = o.bulan === state.pilih;
+  return `<td class="num omzet-sel ${ini ? 'ini' : 'lain'}" title="${ini ? 'Masuk omzet bulan ini' : `Omzet bulan ${bulan(o.bulan)}`}">
+    <div>${angka(o.nilai)}</div><div class="small">${tanggal(o.tanggal)}</div></td>`;
+}
+
 function renderTabel() {
   const q = $('cari-omzet').value.trim().toLowerCase();
   const rows = state.rows.filter(r => barisCocok(r, q));
-  const total = rows.reduce((a, r) => a + Number(r.nilai), 0);
-  $('judul-tabel').textContent = `Daftar omzet ${bulan(state.pilih)} · ${rows.length} baris`;
+  const total = rows.reduce((a, r) => a + Number(r.omzet_bulan_ini), 0);
+  $('judul-tabel').textContent = `Daftar omzet ${bulan(state.pilih)} · ${rows.length} SO`;
   if (!rows.length) {
     $('tbl-omzet').innerHTML = `<tbody><tr><td class="loading">${state.rows.length ? 'Tidak ada yang cocok dengan pencarian.' : 'Tidak ada omzet di bulan ini.'}</td></tr></tbody>`;
     return;
   }
+  const n = jumlahKolomOmzet(rows);
+  const headOmzet = Array.from({ length: n }, (_, i) => `<th class="num">Omzet ${i + 1}</th>`).join('');
   const body = rows.map(r => `
     <tr>
-      <td>${tanggal(r.tanggal)}</td>
       <td><b>${esc(r.so_no)}</b></td>
-      <td>${Number(r.omzet_ke) === 1 ? '<span class="badge b-blue">Omzet 1</span>' : `<span class="badge b-amber">Omzet ${esc(r.omzet_ke)}</span>`}</td>
       <td>${teks(r.customer)}</td>
       <td>${r.project_code ? `<a href="/project?kode=${encodeURIComponent(r.project_code)}">${esc(r.project_code)}</a>` : STRIP}</td>
       <td class="wrap">${teks(r.project_name)}</td>
       <td class="num">${angka(r.kontrak)}</td>
-      <td class="num"><b>${angka(r.nilai)}</b></td>
+      ${Array.from({ length: n }, (_, i) => selOmzet(r.omzet[i])).join('')}
+      <td class="num sep"><b>${angka(r.omzet_bulan_ini)}</b></td>
       <td>${teks(r.sales)}</td>
       <td>${teks(r.arsitek)}</td>
       <td>${teks(r.kontraktor)}</td>
@@ -223,21 +232,27 @@ function renderTabel() {
     </tr>`).join('');
   $('tbl-omzet').innerHTML = `
     <thead><tr>
-      <th>Tanggal</th><th>No SO</th><th>Jenis</th><th>Customer</th><th>Kode Project</th><th>Nama Project</th>
-      <th class="num">Kontrak</th><th class="num">Omzet</th><th>Sales</th><th>Arsitek</th><th>Kontraktor</th><th>PMSM</th>
+      <th>No SO</th><th>Customer</th><th>Kode Project</th><th>Nama Project</th><th class="num">Kontrak</th>
+      ${headOmzet}<th class="num sep">Omzet ${bulan(state.pilih)}</th><th>Sales</th><th>Arsitek</th><th>Kontraktor</th><th>PMSM</th>
     </tr></thead>
     <tbody>${body}</tbody>
-    <tfoot><tr><td colspan="7"><b>Total</b></td><td class="num"><b>${angka(total)}</b></td><td colspan="4"></td></tr></tfoot>`;
+    <tfoot><tr><td colspan="${5 + n}"><b>Total</b> <span class="muted small">· sel berwarna = omzet yang masuk bulan ini</span></td><td class="num sep"><b>${angka(total)}</b></td><td colspan="4"></td></tr></tfoot>`;
 }
 
 function unduhCsv() {
   const q = $('cari-omzet').value.trim().toLowerCase();
   const rows = state.rows.filter(r => barisCocok(r, q));
+  const n = jumlahKolomOmzet(rows);
   const kolom = [
-    ['Tanggal', r => r.tanggal], ['No SO', r => r.so_no], ['Omzet Ke', r => r.omzet_ke], ['Customer', r => r.customer],
-    ['Kode Project', r => r.project_code], ['Nama Project', r => r.project_name], ['Kontrak', r => r.kontrak],
-    ['Omzet', r => r.nilai], ['Sales', r => r.sales], ['Arsitek', r => r.arsitek], ['Kontraktor', r => r.kontraktor], ['PMSM', r => r.pmsm]
+    ['No SO', r => r.so_no], ['Customer', r => r.customer], ['Kode Project', r => r.project_code],
+    ['Nama Project', r => r.project_name], ['Kontrak', r => r.kontrak]
   ];
+  for (let i = 0; i < n; i++) {
+    kolom.push([`Omzet ${i + 1}`, r => r.omzet[i] ? r.omzet[i].nilai : '']);
+    kolom.push([`Tanggal Omzet ${i + 1}`, r => r.omzet[i] ? r.omzet[i].tanggal : '']);
+  }
+  kolom.push([`Omzet ${state.pilih}`, r => r.omzet_bulan_ini], ['Sales', r => r.sales], ['Arsitek', r => r.arsitek],
+    ['Kontraktor', r => r.kontraktor], ['PMSM', r => r.pmsm]);
   const sel = v => {
     const s = String(v ?? '');
     return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
