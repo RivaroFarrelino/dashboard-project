@@ -107,12 +107,13 @@ def api_projects():
     like = f"%{q}%"
     rows = db.query(
         "SELECT project_code AS kode, MAX(project_name) AS nama, MAX(sell_to_customer_name) AS customer, "
-        "COUNT(*) AS jml_so, MAX(posting_date) AS so_terakhir "
+        "COUNT(*) AS jml_so, MAX(posting_date) AS so_terakhir, "
+        "IF(%s = '', NULL, MAX(CASE WHEN no LIKE %s THEN no END)) AS so_cocok "
         "FROM bc_sales_header "
         "WHERE brand = %s AND project_code IS NOT NULL "
         "AND (project_code LIKE %s OR project_name LIKE %s OR sell_to_customer_name LIKE %s OR no LIKE %s) "
         "GROUP BY project_code ORDER BY so_terakhir DESC LIMIT 30",
-        (BRAND, like, like, like, like),
+        (q, like, BRAND, like, like, like, like),
     )
     return jsonify(rows)
 
