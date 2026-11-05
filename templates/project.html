@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% block title %}Project{% endblock %}
 {% block content %}
 <header class="page-head">
   <div>
@@ -8,8 +7,9 @@
   </div>
   <div class="search">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-    <input id="cari-project" type="search" autocomplete="off" placeholder="Cari kode project, nama, customer, atau no SO">
-    <div class="search-list" id="hasil-cari" hidden></div>
+    <input id="cari-project" type="search" autocomplete="off" role="combobox" aria-controls="hasil-cari" placeholder="Cari kode project, nama, customer, atau no SO">
+    <kbd class="kbd">/</kbd>
+    <div class="search-list" id="hasil-cari" role="listbox" hidden></div>
   </div>
 </header>
 
