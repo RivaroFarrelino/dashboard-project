@@ -251,14 +251,30 @@ def api_omzet():
     bulan = request.args.get("bulan", "")
     if not re.fullmatch(r"\d{4}-\d{2}", bulan):
         return jsonify(pesan="Pilih bulan terlebih dahulu."), 400
-    rows = db.query(
-        "SELECT o.so_no, o.omzet_ke, o.tanggal, o.nilai, h.sell_to_customer_name AS customer, h.project_code, "
+    events = db.query(
+        "SELECT o.so_no, o.omzet_ke, o.tanggal, o.bulan, o.nilai, h.sell_to_customer_name AS customer, h.project_code, "
         "h.project_name, h.contract_amount AS kontrak, h.sales_dim5 AS sales, h.arsitek_dim7 AS arsitek, "
         "h.kontraktor_dim8 AS kontraktor, h.pmsm_dim6 AS pmsm "
         "FROM v_omzet o JOIN bc_sales_header h ON h.no = o.so_no "
-        "WHERE h.brand = %s AND o.bulan = %s ORDER BY o.tanggal, o.so_no",
+        "WHERE h.brand = %s AND o.so_no IN (SELECT x.so_no FROM v_omzet x WHERE x.bulan = %s) "
+        "ORDER BY o.so_no, o.omzet_ke",
         (BRAND, bulan),
     )
+    per_so = {}
+    for e in events:
+        so = per_so.setdefault(e["so_no"], {
+            key: e[key] for key in (
+                "so_no", "customer", "project_code", "project_name", "kontrak",
+                "sales", "arsitek", "kontraktor", "pmsm")
+        })
+        so.setdefault("omzet", []).append(
+            {"ke": e["omzet_ke"], "tanggal": e["tanggal"], "bulan": e["bulan"], "nilai": e["nilai"]})
+    rows = list(per_so.values())
+    for r in rows:
+        bulan_ini = [o for o in r["omzet"] if o["bulan"] == bulan]
+        r["omzet_bulan_ini"] = sum(float(o["nilai"] or 0) for o in bulan_ini)
+        r["tanggal_bulan_ini"] = min(o["tanggal"] for o in bulan_ini)
+    rows.sort(key=lambda r: (r["tanggal_bulan_ini"], r["so_no"]))
     sales = db.query(
         "SELECT s.sales, s.omzet, s.jml, g.kode AS grup, g.aturan, g.batas_omzet "
         "FROM v_omzet_sales s LEFT JOIN v_sales_grup g ON g.tahun = %s AND g.sales_dim5 = s.sales "
@@ -266,7 +282,6 @@ def api_omzet():
         (int(bulan[:4]), BRAND, bulan),
     )
     return jsonify(bulan=bulan, rows=rows, sales=sales)
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), debug=False)
