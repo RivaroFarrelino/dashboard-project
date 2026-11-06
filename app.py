@@ -2,7 +2,7 @@ import hmac
 import logging
 import os
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from flask import Flask, Response, jsonify, redirect, render_template, request
@@ -78,11 +78,6 @@ def page_project():
 @app.get("/omzet")
 def page_omzet():
     return render_template("omzet.html", active="omzet")
-
-
-@app.get("/penagihan-fg")
-def page_penagihan():
-    return render_template("segera.html", active="penagihan", judul="Penagihan FG")
 
 
 @app.get("/healthz")
@@ -282,6 +277,124 @@ def api_omzet():
         (int(bulan[:4]), BRAND, bulan),
     )
     return jsonify(bulan=bulan, rows=rows, sales=sales)
+
+
+PERIODE_HARI = {"30": 30, "90": 90, "180": 180}
+UKURAN_HALAMAN = 100
+FROM_PENAGIHAN = (
+    "FROM bc_sales_line l "
+    "JOIN app_calc_item_output o ON o.item_no = l.item_no "
+    "JOIN bc_sales_header h ON h.no = l.document_no "
+    "LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
+)
+
+
+def _filter_penagihan(args):
+    periode = args.get("periode", "90")
+    if periode in PERIODE_HARI:
+        sejak = date.today() - timedelta(days=PERIODE_HARI[periode])
+    elif periode == "tahun":
+        sejak = date(date.today().year, 1, 1)
+    else:
+        sejak = date(2000, 1, 1)
+    where = (
+        "WHERE l.brand = %s AND l.type = 'Item' AND l.item_no <> 'SO-AST' "
+        "AND COALESCE(l.parent_item_no, l.item_no) = l.item_no AND l.line_amount <> 0 "
+        "AND o.qty_output > 0 AND o.tgl_output >= %s "
+    )
+    params = [BRAND, sejak]
+    q = args.get("q", "").strip()
+    if q:
+        like = f"%{q}%"
+        where += (
+            "AND (l.document_no LIKE %s OR h.project_code LIKE %s OR h.project_name LIKE %s "
+            "OR h.sell_to_customer_name LIKE %s OR l.item_no LIKE %s OR h.external_document_no LIKE %s "
+            "OR o.prod_order_no LIKE %s OR l.fppp_no LIKE %s) "
+        )
+        params += [like] * 8
+    return where, params
+
+
+@app.get("/penagihan-fg")
+def page_penagihan():
+    return render_template("penagihan.html", active="penagihan")
+
+
+@app.get("/api/penagihan")
+def api_penagihan():
+    where, params = _filter_penagihan(request.args)
+    status = request.args.get("status", "belum")
+    try:
+        halaman = max(1, int(request.args.get("halaman", "1")))
+    except ValueError:
+        halaman = 1
+    ringkas = db.query_one(
+        "SELECT COUNT(*) AS jml, COALESCE(SUM(l.line_amount), 0) AS nilai, "
+        "COALESCE(SUM(t.is_ticked = 1), 0) AS jml_tagih, "
+        "COALESCE(SUM(IF(t.is_ticked = 1, l.line_amount, 0)), 0) AS nilai_tagih "
+        + FROM_PENAGIHAN + where,
+        params,
+    )
+    filter_status = ""
+    if status == "belum":
+        filter_status = "AND COALESCE(t.is_ticked, 0) = 0 "
+    elif status == "sudah":
+        filter_status = "AND t.is_ticked = 1 "
+    total = db.query_one("SELECT COUNT(*) AS n " + FROM_PENAGIHAN + where + filter_status, params)["n"]
+    rows = db.query(
+        "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
+        "l.line_amount AS nilai, COALESCE(l.fppp_no, LEFT(l.item_no, 8)) AS fppp_no, o.prod_order_no, "
+        "o.qty_output, o.tgl_output, h.external_document_no AS quo, h.project_code, h.project_name, "
+        "h.sell_to_customer_name AS customer, COALESCE(t.is_ticked, 0) AS is_ticked, t.updated_by, "
+        "DATE_FORMAT(CONVERT_TZ(t.updated_at, '+00:00', '+07:00'), '%%Y-%%m-%%d %%H:%%i') AS updated_at "
+        + FROM_PENAGIHAN + where + filter_status
+        + "ORDER BY o.tgl_output DESC, l.document_no, l.line_no LIMIT %s OFFSET %s",
+        params + [UKURAN_HALAMAN, (halaman - 1) * UKURAN_HALAMAN],
+    )
+    return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN, rows=rows)
+
+
+@app.post("/api/penagihan/tandai")
+def api_penagihan_tandai():
+    data = request.get_json(silent=True) or {}
+    items = data.get("items") or []
+    tagih = bool(data.get("tagih"))
+    kunci = []
+    for it in items[:500]:
+        try:
+            kunci.append((str(it["so_no"])[:20], int(it["line_no"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not kunci:
+        return jsonify(pesan="Tidak ada item yang dipilih."), 400
+    kondisi = " OR ".join(["(l.document_no = %s AND l.line_no = %s)"] * len(kunci))
+    params = [v for k in kunci for v in k]
+    baris = db.query(
+        "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.quantity AS qty, COALESCE(t.is_ticked, 0) AS is_ticked "
+        "FROM bc_sales_line l LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
+        "WHERE l.brand = %s AND (" + kondisi + ")",
+        [BRAND] + params,
+    )
+    ubah = [b for b in baris if bool(b["is_ticked"]) != tagih]
+    if ubah:
+        oleh = (request.authorization.username if request.authorization else None) or "tanpa login"
+        perintah = []
+        for b in ubah:
+            qty = b["qty"] if tagih else 0
+            perintah.append((
+                "INSERT INTO app_fg_tagih (so_no, line_no, item_no, qty_tagih, is_ticked, updated_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE item_no = VALUES(item_no), "
+                "qty_tagih = VALUES(qty_tagih), is_ticked = VALUES(is_ticked), updated_by = VALUES(updated_by)",
+                (b["so_no"], b["line_no"], b["item_no"], qty, 1 if tagih else 0, oleh),
+            ))
+            perintah.append((
+                "INSERT INTO app_fg_tagih_log (so_no, line_no, item_no, action, qty, done_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (b["so_no"], b["line_no"], b["item_no"], "TICK" if tagih else "UNTICK", b["qty"], oleh),
+            ))
+        db.transaksi(perintah)
+        log.info("Penagihan FG: %s item di%s oleh %s", len(ubah), "tandai" if tagih else "batalkan", oleh)
+    return jsonify(diubah=len(ubah), oleh=(request.authorization.username if request.authorization else None))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), debug=False)
