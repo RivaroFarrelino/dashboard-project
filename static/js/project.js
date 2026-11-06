@@ -240,7 +240,7 @@ function renderSo(rows) {
         <td>${barPersen(r.pct_fg_finish)}</td>
         <td>${barPersen(r.pct_ship)}</td>
         <td>${barPersen(r.pct_fg_tagih)}</td>
-        <td class="sep">${tanggal(r.first_paid_date)}</td>
+        <td class="sep" title="${r.omzet_date ? '' : 'Belum mencapai DP sesuai TOP'}">${tanggal(r.omzet_date)}</td>
         ${omzet}
         <td class="num">${angka(r.paid)}</td>
         <td class="sep num" ${komisiNull}>${persenKomisi(k.pct_komisi)}</td>
