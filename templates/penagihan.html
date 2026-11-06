@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Penagihan FG</h1>
+    <p class="muted">Centang barang jadi (FG) yang sudah ditagih. Centang bisa dibatalkan kapan saja.</p>
+  </div>
+</header>
+
+<section id="pesan" class="alert" hidden></section>
+
+<div class="filter-bar card">
+  <div class="search search-sm">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="f-cari" type="search" placeholder="Cari SO, project, customer, item, prod order, FPPP">
+  </div>
+  <div class="segmen" id="f-status" role="tablist">
+    <button data-v="belum" class="aktif">Belum ditagih</button>
+    <button data-v="sudah">Sudah ditagih</button>
+    <button data-v="semua">Semua</button>
+  </div>
+  <label class="select-wrap inline">
+    <span class="muted small">Output</span>
+    <select id="f-periode">
+      <option value="30">30 hari terakhir</option>
+      <option value="90" selected>90 hari terakhir</option>
+      <option value="180">180 hari terakhir</option>
+      <option value="tahun">Tahun ini</option>
+      <option value="semua">Semua</option>
+    </select>
+  </label>
+</div>
+
+<div class="kpi-grid kpi-3">
+  <div class="card kpi"><div class="kpi-label">Item FG sudah output</div><div class="kpi-value" id="k-fg">–</div><div class="kpi-sub" id="k-fg-sub"></div></div>
+  <div class="card kpi"><div class="kpi-label">Sudah ditagih</div><div class="kpi-value" id="k-tagih">–</div><div class="kpi-sub" id="k-tagih-sub"></div><div class="bar"><span id="k-tagih-bar"></span></div></div>
+  <div class="card kpi"><div class="kpi-label">Belum ditagih</div><div class="kpi-value" id="k-belum">–</div><div class="kpi-sub" id="k-belum-sub"></div></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h3 id="judul-tabel">Daftar item FG</h3>
+    <div class="toolbar">
+      <span class="muted small" id="info-pilih"></span>
+      <button class="btn-sm" id="btn-tandai" disabled>Tandai ditagih</button>
+      <button class="btn-sm" id="btn-batal" disabled>Batalkan tagih</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl" id="tbl-fg"></table>
+  </div>
+  <div class="pager">
+    <span class="muted small" id="info-halaman"></span>
+    <div class="toolbar">
+      <button class="btn-sm" id="btn-prev">‹ Sebelumnya</button>
+      <button class="btn-sm" id="btn-next">Berikutnya ›</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/penagihan.js') }}"></script>
+{% endblock %}
