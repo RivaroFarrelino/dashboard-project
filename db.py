@@ -17,6 +17,7 @@ def get_db():
             autocommit=True,
             connect_timeout=10,
             read_timeout=60,
+            init_command="SET time_zone = '+07:00'",
         )
     return g.db
 
