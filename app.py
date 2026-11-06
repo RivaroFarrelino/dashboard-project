@@ -89,7 +89,7 @@ def healthz():
 @app.get("/api/info")
 def api_info():
     row = db.query_one(
-        "SELECT DATE_FORMAT(CONVERT_TZ(MAX(finished_at), '+00:00', '+07:00'), '%%Y-%%m-%%d %%H:%%i') AS sync_terakhir "
+        "SELECT DATE_FORMAT(MAX(finished_at), '%%Y-%%m-%%d %%H:%%i') AS sync_terakhir "
         "FROM app_sync_log WHERE brand = %s AND status = 'OK'",
         (BRAND,),
     )
@@ -346,7 +346,7 @@ def api_penagihan():
         "l.line_amount AS nilai, COALESCE(l.fppp_no, LEFT(l.item_no, 8)) AS fppp_no, o.prod_order_no, "
         "o.qty_output, o.tgl_output, h.external_document_no AS quo, h.project_code, h.project_name, "
         "h.sell_to_customer_name AS customer, COALESCE(t.is_ticked, 0) AS is_ticked, t.updated_by, "
-        "DATE_FORMAT(CONVERT_TZ(t.updated_at, '+00:00', '+07:00'), '%%Y-%%m-%%d %%H:%%i') AS updated_at "
+        "DATE_FORMAT(t.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at "
         + FROM_PENAGIHAN + where + filter_status
         + "ORDER BY o.tgl_output DESC, l.document_no, l.line_no LIMIT %s OFFSET %s",
         params + [UKURAN_HALAMAN, (halaman - 1) * UKURAN_HALAMAN],
