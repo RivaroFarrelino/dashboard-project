@@ -36,3 +36,16 @@ def close_db(_=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+def transaksi(perintah):
+    conn = get_db()
+    conn.begin()
+    try:
+        with conn.cursor() as cur:
+            for sql, params in perintah:
+                cur.execute(sql, params)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
