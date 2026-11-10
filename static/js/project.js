@@ -290,7 +290,7 @@ function renderLines(so, rows) {
   if (!rows.length) return `<div class="loading">SO ${esc(so)} belum punya sales lines.</div>`;
   const body = rows.map(r => `
     <tr>
-      <td>${teks(r.item_no)} ${r.is_fg ? '' : '<span class="badge b-gray">Hardware</span>'}</td>
+      <td>${teks(r.item_no)}</td>
       <td>${teks(r.nama_item)}</td>
       <td class="num">${ukuran(r.lebar)}</td>
       <td class="num">${ukuran(r.tinggi)}</td>
