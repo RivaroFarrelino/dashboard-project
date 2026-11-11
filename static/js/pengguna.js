@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
-const LABEL_PERAN = { SUPER: 'Super', FINANCE: 'Finance' };
-const KELAS_PERAN = { SUPER: 'b-blue', FINANCE: 'b-green' };
+const LABEL_PERAN = { ADMIN: 'Admin', FINANCE: 'Finance' };
+const KELAS_PERAN = { ADMIN: 'b-blue', FINANCE: 'b-green' };
 const state = { rows: [], saya: null, edit: null };
 
 let timerToast = null;
