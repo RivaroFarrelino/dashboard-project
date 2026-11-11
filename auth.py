@@ -16,7 +16,7 @@ import db
 bp = Blueprint("auth", __name__)
 log = logging.getLogger("dashboard.auth")
 
-PERAN = {"SUPER": "Super", "FINANCE": "Finance"}
+PERAN = {"ADMIN": "Admin", "FINANCE": "Finance"}
 MAKS_GAGAL_USER = 5
 MAKS_GAGAL_IP = 20
 MENIT_KUNCI = 15
@@ -300,7 +300,7 @@ def ganti_password():
 
 @bp.get("/pengguna")
 def pengguna():
-    tolak = butuh_peran("SUPER")
+    tolak = butuh_peran("ADMIN")
     if tolak:
         return tolak
     return render_template("pengguna.html", active="pengguna", peran=PERAN)
@@ -308,7 +308,7 @@ def pengguna():
 
 @bp.get("/api/pengguna")
 def api_pengguna():
-    tolak = butuh_peran("SUPER")
+    tolak = butuh_peran("ADMIN")
     if tolak:
         return tolak
     rows = db.query(
@@ -334,7 +334,7 @@ def _data_pengguna(data):
 
 @bp.post("/api/pengguna")
 def api_tambah_pengguna():
-    tolak = butuh_peran("SUPER")
+    tolak = butuh_peran("ADMIN")
     if tolak:
         return tolak
     data = request.get_json(silent=True) or {}
@@ -359,7 +359,7 @@ def api_tambah_pengguna():
 
 @bp.post("/api/pengguna/<int:uid>")
 def api_ubah_pengguna(uid):
-    tolak = butuh_peran("SUPER")
+    tolak = butuh_peran("ADMIN")
     if tolak:
         return tolak
     data = request.get_json(silent=True) or {}
@@ -370,7 +370,7 @@ def api_ubah_pengguna(uid):
     target = db.query_one("SELECT id, username, peran, is_active FROM app_user WHERE id = %s", (uid,))
     if not target:
         return jsonify(pesan="Pengguna tidak ditemukan."), 404
-    if uid == g.user["id"] and (peran != "SUPER" or not aktif):
+    if uid == g.user["id"] and (peran != "ADMIN" or not aktif):
         return jsonify(pesan="Anda tidak bisa menurunkan peran atau menonaktifkan akun sendiri."), 400
     keluar = int(peran != target["peran"] or aktif != target["is_active"])
     db.query(
@@ -384,7 +384,7 @@ def api_ubah_pengguna(uid):
 
 @bp.post("/api/pengguna/<int:uid>/reset")
 def api_reset_pengguna(uid):
-    tolak = butuh_peran("SUPER")
+    tolak = butuh_peran("ADMIN")
     if tolak:
         return tolak
     target = db.query_one("SELECT id, username FROM app_user WHERE id = %s", (uid,))
