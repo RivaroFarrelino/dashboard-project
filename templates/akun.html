@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Akun saya</h1>
+    <p class="muted">Data akun dan penggantian password.</p>
+  </div>
+</header>
+
+{% if user.harus_ganti %}
+<section class="alert">Anda masih memakai password sementara. Ganti password dulu untuk membuka menu lain.</section>
+{% endif %}
+
+<div class="akun-grid">
+  <div class="card">
+    <div class="card-head"><h3>Profil</h3></div>
+    <dl class="info-list">
+      <dt>Nama</dt><dd>{{ user.nama }}</dd>
+      <dt>Username</dt><dd>{{ user.username }}</dd>
+      <dt>Peran</dt><dd>{{ nama_peran(user.peran) }}</dd>
+      <dt>Login terakhir</dt><dd>{{ user.last_login_at or '–' }} WIB</dd>
+      <dt>Password diganti</dt><dd>{{ (user.password_changed_at ~ ' WIB') if user.password_changed_at else 'Belum pernah' }}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>Ganti password</h3></div>
+    {% if pesan %}
+    <div class="login-error" role="alert">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+      <span>{{ pesan }}</span>
+    </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('auth.ganti_password') }}" class="form-akun">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="text" name="username" value="{{ user.username }}" autocomplete="username" hidden>
+      <label class="field">
+        <span class="field-label">Password lama</span>
+        <span class="field-input"><input type="password" name="lama" autocomplete="current-password" maxlength="128" required></span>
+      </label>
+      <label class="field">
+        <span class="field-label">Password baru</span>
+        <span class="field-input"><input type="password" name="baru" autocomplete="new-password" maxlength="128" required></span>
+      </label>
+      <label class="field">
+        <span class="field-label">Ulangi password baru</span>
+        <span class="field-input"><input type="password" name="ulang" autocomplete="new-password" maxlength="128" required></span>
+      </label>
+      <button type="submit" class="btn-utama btn-utama-auto">Simpan password</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

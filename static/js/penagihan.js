@@ -105,14 +105,14 @@ function barisDariKunci(k) {
 
 async function simpan(rows, tagih) {
   const items = rows.map(r => ({ so_no: r.so_no, line_no: r.line_no }));
-  const hasil = await ambilJsonPost('/api/penagihan/tandai', { items, tagih });
+  const hasil = await kirimJson('/api/penagihan/tandai', { items, tagih });
   const sekarang = new Date();
   const waktu = `${sekarang.getFullYear()}-${String(sekarang.getMonth() + 1).padStart(2, '0')}-${String(sekarang.getDate()).padStart(2, '0')} ${String(sekarang.getHours()).padStart(2, '0')}:${String(sekarang.getMinutes()).padStart(2, '0')}`;
   const ringkasData = state.data.ringkas;
   rows.forEach(r => {
     if (Boolean(r.is_ticked) === tagih) return;
     r.is_ticked = tagih ? 1 : 0;
-    r.updated_by = tagih ? (hasil.oleh || 'tanpa login') : null;
+    r.updated_by = tagih ? hasil.oleh : null;
     r.updated_at = tagih ? waktu : null;
     const arah = tagih ? 1 : -1;
     ringkasData.jml_tagih = Number(ringkasData.jml_tagih) + arah;
@@ -120,19 +120,6 @@ async function simpan(rows, tagih) {
   });
   renderRingkas();
   return hasil;
-}
-
-async function ambilJsonPost(url, body) {
-  let res;
-  try {
-    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) });
-  } catch (e) {
-    throw new Error('Koneksi ke server terputus. Perubahan belum tersimpan.');
-  }
-  let data = null;
-  try { data = await res.json(); } catch (e) { data = null; }
-  if (!res.ok) throw new Error((data && data.pesan) || 'Perubahan belum tersimpan. Coba lagi.');
-  return data;
 }
 
 async function aksiMassal(tagih) {

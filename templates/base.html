@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Dashboard Project</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
@@ -32,10 +33,37 @@
         <a href="/penagihan-fg" class="nav-item {% if active == 'penagihan' %}active{% endif %}">
           <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Penagihan FG</span>
         </a>
+        {% if user and user.peran == 'SUPER' %}
+        <a href="/pengguna" class="nav-item {% if active == 'pengguna' %}active{% endif %}">
+          <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Pengguna</span>
+        </a>
+        {% endif %}
       </nav>
-      <div class="sync-info" id="sync-info">Memuat info sync…</div>
+      <div class="sidebar-bawah">
+        <div class="sync-info" id="sync-info">Memuat info sync…</div>
+        {% if user %}
+        {% set kata = user.nama.split() %}
+        <div class="user-box">
+          <a href="/akun" class="user-link {% if active == 'akun' %}active{% endif %}" title="Akun saya">
+            <span class="avatar">{{ ((kata[0][0] if kata else '?') ~ (kata[1][0] if kata|length > 1 else ''))|upper }}</span>
+            <span class="user-teks"><span class="user-nama">{{ user.nama }}</span><span class="user-peran">{{ nama_peran(user.peran) }}</span></span>
+          </a>
+          <form method="post" action="/logout">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <button type="submit" class="btn-icon" title="Keluar" aria-label="Keluar">
+              <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
     </aside>
     <main class="content">
+      {% with pesan_flash = get_flashed_messages(with_categories=true) %}
+      {% for kategori, isi in pesan_flash %}
+      <div class="flash flash-{{ kategori }}" role="status">{{ isi }}</div>
+      {% endfor %}
+      {% endwith %}
       {% block content %}{% endblock %}
     </main>
   </div>

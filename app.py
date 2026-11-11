@@ -1,14 +1,14 @@
-import hmac
 import logging
 import os
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from flask import Flask, Response, jsonify, redirect, render_template, request
+from flask import Flask, g, jsonify, redirect, render_template, request
 from flask.json.provider import DefaultJSONProvider
 from werkzeug.exceptions import HTTPException
 
+import auth
 import db
 
 BRAND = "AST"
@@ -32,6 +32,7 @@ class JsonProvider(DefaultJSONProvider):
 app = Flask(__name__)
 app.json = JsonProvider(app)
 app.teardown_appcontext(db.close_db)
+auth.init_app(app)
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("dashboard")
 
@@ -48,21 +49,9 @@ def handle_error(err):
     return render_template("error.html", pesan=PESAN_GAGAL), 500
 
 
-@app.before_request
-def cek_akses():
-    user = os.environ.get("BASIC_AUTH_USER")
-    password = os.environ.get("BASIC_AUTH_PASSWORD")
-    if not user or not password or request.path == "/healthz":
-        return None
-    auth = request.authorization
-    if auth and hmac.compare_digest(auth.username or "", user) and hmac.compare_digest(auth.password or "", password):
-        return None
-    return Response("Silakan login untuk membuka dashboard.", 401, {"WWW-Authenticate": 'Basic realm="Dashboard Project"'})
-
-
 @app.context_processor
 def inject_globals():
-    return {"brand_nama": BRAND_NAMA}
+    return {"brand_nama": BRAND_NAMA, "user": g.get("user")}
 
 
 @app.get("/")
@@ -376,8 +365,8 @@ def api_penagihan_tandai():
         [BRAND] + params,
     )
     ubah = [b for b in baris if bool(b["is_ticked"]) != tagih]
+    oleh = g.user["username"]
     if ubah:
-        oleh = (request.authorization.username if request.authorization else None) or "tanpa login"
         perintah = []
         for b in ubah:
             qty = b["qty"] if tagih else 0
@@ -394,7 +383,7 @@ def api_penagihan_tandai():
             ))
         db.transaksi(perintah)
         log.info("Penagihan FG: %s item di%s oleh %s", len(ubah), "tandai" if tagih else "batalkan", oleh)
-    return jsonify(diubah=len(ubah), oleh=(request.authorization.username if request.authorization else None))
+    return jsonify(diubah=len(ubah), oleh=oleh)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), debug=False)

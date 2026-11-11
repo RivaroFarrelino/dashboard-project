@@ -51,12 +51,19 @@ const barPersen = v => {
   return `<div class="pct-cell"><div class="bar ${n >= 100 ? 'full' : ''}"><span style="width:${n}%"></span></div><span class="v">${persen(v)}</span></div>`;
 };
 
-async function ambilJson(url) {
+const CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+function keLogin() {
+  const tujuan = location.pathname + location.search;
+  location.href = `/login?next=${encodeURIComponent(tujuan)}`;
+}
+
+async function mintaJson(url, opsi, pesanPutus, pesanGagal) {
   let res;
   try {
-    res = await fetch(url, { headers: { Accept: 'application/json' } });
+    res = await fetch(url, opsi);
   } catch (e) {
-    throw new Error('Koneksi ke server terputus. Periksa internet lalu coba lagi.');
+    throw new Error(pesanPutus);
   }
   let data = null;
   try {
@@ -64,8 +71,26 @@ async function ambilJson(url) {
   } catch (e) {
     data = null;
   }
-  if (!res.ok) throw new Error((data && data.pesan) || 'Data belum bisa dimuat. Coba lagi beberapa saat lagi.');
+  if (res.status === 401) {
+    keLogin();
+    throw new Error((data && data.pesan) || 'Sesi berakhir. Silakan login lagi.');
+  }
+  if (!res.ok) throw new Error((data && data.pesan) || pesanGagal);
   return data;
+}
+
+function ambilJson(url) {
+  return mintaJson(url, { headers: { Accept: 'application/json' } },
+    'Koneksi ke server terputus. Periksa internet lalu coba lagi.',
+    'Data belum bisa dimuat. Coba lagi beberapa saat lagi.');
+}
+
+function kirimJson(url, body) {
+  return mintaJson(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-Token': CSRF },
+    body: JSON.stringify(body || {})
+  }, 'Koneksi ke server terputus. Perubahan belum tersimpan.', 'Perubahan belum tersimpan. Coba lagi.');
 }
 
 (async () => {
