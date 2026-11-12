@@ -400,13 +400,13 @@ function renderNopay(rows) {
         <td>${teks(masuk ? r.source_so : r.target_so)}</td>
         <td>${teks(r.target_pi)}</td>
         <td>${teks(r.source_pi)}</td>
-        <td>${teks(r.ref)}</td>
+        <td>${r.sumber === 'SHEET' ? 'Sheet Payment Allocation' : teks(r.ref)}</td>
         <td class="num">${angka(masuk ? r.amount : -Number(r.amount))}</td>
       </tr>`;
   }).join('');
   $('tbl-nopay').innerHTML = `
     <thead><tr>
-      <th>Tanggal</th><th>Arah</th><th>SO Lawan</th><th>PI NO-PAY</th><th>PI Sumber</th><th>Ref Sumber</th><th class="num">Nilai</th>
+      <th>Tanggal</th><th>Arah</th><th>SO Lawan</th><th>PI NO-PAY</th><th>PI Sumber</th><th>Dasar</th><th class="num">Nilai</th>
     </tr></thead>
     <tbody>${body}</tbody>`;
 }
