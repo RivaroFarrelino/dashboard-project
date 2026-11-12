@@ -220,7 +220,7 @@ def api_so_dokumen(so_no):
     so["nopay_in"] = nopay.get("nopay_in") or 0
     so["nopay_out"] = nopay.get("nopay_out") or 0
     alokasi = db.query(
-        "SELECT target_pi, target_so, source_pi, source_so, ref, amount, tgl, "
+        "SELECT target_pi, target_so, source_pi, source_so, ref, amount, tgl, sumber, "
         "IF(target_so = %s, 'IN', 'OUT') AS arah "
         "FROM app_nopay_alloc WHERE amount > 0 AND (target_so = %s OR source_so = %s) "
         "ORDER BY tgl, target_pi, ref",
