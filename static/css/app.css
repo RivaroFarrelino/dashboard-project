@@ -384,6 +384,7 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 .kotak-password { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
 .kotak-password code { font-size: 20px; font-weight: 600; letter-spacing: .04em; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; user-select: all; }
 .aksi-sel { text-align: right; }
+.nopay-judul { margin: 16px 0 8px; }
 .sub-sel { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
 .aksi-sel .btn-sm { margin-left: 4px; }
 
