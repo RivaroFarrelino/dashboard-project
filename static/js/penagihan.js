@@ -73,7 +73,7 @@ function renderTabel() {
       <td><label class="switch"><input type="checkbox" data-tagih ${r.is_ticked ? 'checked' : ''}><span></span></label></td>
       <td>${tanggal(r.tgl_output)}</td>
       <td>${teks(r.prod_order_no)}</td>
-      <td>${teks(r.fppp_no)}</td>
+      <td title="${esc(r.fppp_kode || '')}">${teks(r.fppp_no)}</td>
       <td><b>${esc(r.so_no)}</b></td>
       <td>${teks(r.quo)}</td>
       <td>${r.project_code ? `<a href="/project?kode=${encodeURIComponent(r.project_code)}" title="${esc(r.project_name || '')}">${esc(r.project_code)}</a>` : STRIP}</td>
