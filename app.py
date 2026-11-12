@@ -216,7 +216,17 @@ def api_so_dokumen(so_no):
         "WHERE l.so_no = %s ORDER BY l.posting_date, l.psi_no",
         (so_no,),
     )
-    return jsonify(so=so, proforma=proforma, invoice=invoice)
+    nopay = db.query_one("SELECT nopay_in, nopay_out FROM app_calc_so WHERE so_no = %s", (so_no,)) or {}
+    so["nopay_in"] = nopay.get("nopay_in") or 0
+    so["nopay_out"] = nopay.get("nopay_out") or 0
+    alokasi = db.query(
+        "SELECT target_pi, target_so, source_pi, source_so, ref, amount, tgl, "
+        "IF(target_so = %s, 'IN', 'OUT') AS arah "
+        "FROM app_nopay_alloc WHERE amount > 0 AND (target_so = %s OR source_so = %s) "
+        "ORDER BY tgl, target_pi, ref",
+        (so_no, so_no, so_no),
+    )
+    return jsonify(so=so, proforma=proforma, invoice=invoice, nopay=alokasi)
 
 
 @app.get("/api/omzet/bulan")
