@@ -254,8 +254,9 @@ function unduhCsv() {
   kolom.push([`Omzet ${state.pilih}`, r => r.omzet_bulan_ini], ['Sales', r => r.sales], ['Arsitek', r => r.arsitek],
     ['Kontraktor', r => r.kontraktor], ['PMSM', r => r.pmsm]);
   const sel = v => {
-    const s = String(v ?? '');
-    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = String(v ?? '');
+    if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const isi = [kolom.map(k => k[0]).join(';'), ...rows.map(r => kolom.map(k => sel(k[1](r))).join(';'))].join('\r\n');
   const blob = new Blob(['﻿' + isi], { type: 'text/csv;charset=utf-8' });
