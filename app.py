@@ -269,6 +269,19 @@ def api_omzet():
 
 
 PERIODE_HARI = {"30": 30, "90": 90, "180": 180}
+FPPP_BRAND = {
+    "A": "ASTA", "B": "AST", "C": "RSD", "D": "AST", "E": "RSD", "F": "ABX", "G": "MAX", "H": "ASTA",
+    "I": "POL", "J": "MAX", "K": "POL", "L": "MAX", "M": "RAE", "N": "RAS", "O": "MAX", "P": "CAR",
+    "Q": "CAR", "R": "POL", "S": "RSD", "T": "POL", "U": "MAX", "V": "ADE", "W": "ASTB", "X": "MAX", "Y": "ADS",
+}
+FPPP_KODE = "COALESCE(l.fppp_no, LEFT(l.item_no, 8))"
+_FPPP_HURUF = "FIELD(UPPER(LEFT(" + FPPP_KODE + ", 1)), " + ", ".join(f"'{k}'" for k in FPPP_BRAND) + ")"
+FPPP_NO = (
+    f"IF({FPPP_KODE} REGEXP '^[A-Za-z][0-9]{{7}}$' AND {_FPPP_HURUF} > 0, "
+    f"CONCAT(SUBSTRING({FPPP_KODE}, 6, 3), '/FPPP/', ELT({_FPPP_HURUF}, "
+    + ", ".join(f"'{v}'" for v in FPPP_BRAND.values())
+    + f"), '/', SUBSTRING({FPPP_KODE}, 4, 2), '/20', SUBSTRING({FPPP_KODE}, 2, 2)), {FPPP_KODE})"
+)
 UKURAN_HALAMAN = 100
 FROM_PENAGIHAN = (
     "FROM bc_sales_line l "
@@ -298,9 +311,9 @@ def _filter_penagihan(args):
         where += (
             "AND (l.document_no LIKE %s OR h.project_code LIKE %s OR h.project_name LIKE %s "
             "OR h.sell_to_customer_name LIKE %s OR l.item_no LIKE %s OR h.external_document_no LIKE %s "
-            "OR o.prod_order_no LIKE %s OR l.fppp_no LIKE %s) "
+            "OR o.prod_order_no LIKE %s OR " + FPPP_KODE + " LIKE %s OR " + FPPP_NO + " LIKE %s) "
         )
-        params += [like] * 8
+        params += [like] * 9
     return where, params
 
 
@@ -332,7 +345,7 @@ def api_penagihan():
     total = db.query_one("SELECT COUNT(*) AS n " + FROM_PENAGIHAN + where + filter_status, params)["n"]
     rows = db.query(
         "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
-        "l.line_amount AS nilai, COALESCE(l.fppp_no, LEFT(l.item_no, 8)) AS fppp_no, o.prod_order_no, "
+        "l.line_amount AS nilai, " + FPPP_NO + " AS fppp_no, " + FPPP_KODE + " AS fppp_kode, o.prod_order_no, "
         "o.qty_output, o.tgl_output, h.external_document_no AS quo, h.project_code, h.project_name, "
         "h.sell_to_customer_name AS customer, COALESCE(t.is_ticked, 0) AS is_ticked, t.updated_by, "
         "DATE_FORMAT(t.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at "
