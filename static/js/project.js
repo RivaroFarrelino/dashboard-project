@@ -330,6 +330,9 @@ async function bukaDokumen(so) {
   $('m-kpi').innerHTML = '<div class="loading">Memuat…</div>';
   $('tbl-pi').innerHTML = '';
   $('tbl-inv').innerHTML = '';
+  $('tbl-nopay').innerHTML = '';
+  $('m-nopay').dataset.ada = '';
+  $('m-nopay').hidden = true;
   pilihTab('proforma');
   try {
     const data = await ambilJson(`/api/so/${encodeURIComponent(so)}/dokumen`);
@@ -339,12 +342,15 @@ async function bukaDokumen(so) {
     $('m-kpi').innerHTML = [
       ['Proforma Created', angka(s.pi_created)],
       ['Proforma Paid', angka(s.paid)],
+      ...(Number(s.nopay_in) ? [['NO-PAY In', angka(s.nopay_in)]] : []),
+      ...(Number(s.nopay_out) ? [['NO-PAY Out', angka(s.nopay_out)]] : []),
       ['% Created / Kontrak', persen(s.pct_pi)],
       ['% Paid / Kontrak', persen(s.pct_paid)],
       ['Invoice Created', angka(s.invoice_created)],
       ['Sisa OTS', angka(s.sisa_ots)]
     ].map(([l, v]) => `<div><span>${l}</span><b>${v}</b></div>`).join('');
     renderProforma(data.proforma);
+    renderNopay(data.nopay || []);
     renderInvoice();
   } catch (e) {
     $('m-kpi').innerHTML = `<div class="alert">${esc(e.message)}</div>`;
@@ -376,6 +382,31 @@ function renderProforma(rows) {
       <th>Tanggal Proforma</th><th>Nomor</th><th>Status PI</th><th>Nomor SO</th><th>Proforma Type</th><th>Due Date PI</th>
       <th>Currency</th><th class="num">Amount Ori</th><th class="num">Kurs</th><th class="num">Nilai</th><th class="num">Dibayar (PCI)</th>
       <th>Ext Doc No</th><th>Remark</th><th>Posting Description</th>
+    </tr></thead>
+    <tbody>${body}</tbody>`;
+}
+
+function renderNopay(rows) {
+  const wadah = $('m-nopay');
+  wadah.dataset.ada = rows.length ? '1' : '';
+  wadah.hidden = !rows.length || $('tbl-pi').closest('[data-panel]').hidden;
+  if (!rows.length) return;
+  const body = rows.map(r => {
+    const masuk = r.arah === 'IN';
+    return `
+      <tr>
+        <td>${tanggal(r.tgl)}</td>
+        <td><span class="badge ${masuk ? 'b-green' : 'b-amber'}">${masuk ? 'Masuk' : 'Keluar'}</span></td>
+        <td>${teks(masuk ? r.source_so : r.target_so)}</td>
+        <td>${teks(r.target_pi)}</td>
+        <td>${teks(r.source_pi)}</td>
+        <td>${teks(r.ref)}</td>
+        <td class="num">${angka(masuk ? r.amount : -Number(r.amount))}</td>
+      </tr>`;
+  }).join('');
+  $('tbl-nopay').innerHTML = `
+    <thead><tr>
+      <th>Tanggal</th><th>Arah</th><th>SO Lawan</th><th>PI NO-PAY</th><th>PI Sumber</th><th>Ref Sumber</th><th class="num">Nilai</th>
     </tr></thead>
     <tbody>${body}</tbody>`;
 }
@@ -414,7 +445,7 @@ function renderInvoice() {
 
 function pilihTab(nama) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === nama));
-  document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== nama; });
+  document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== nama || (p.id === 'm-nopay' && !p.dataset.ada); });
 }
 
 function tutupModal() {
