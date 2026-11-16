@@ -143,8 +143,23 @@ function setupCari() {
   }
 }
 
+const KUNCI_POSISI = 'project_posisi';
+
+function simpanPosisi() {
+  try { sessionStorage.setItem(KUNCI_POSISI, location.search); } catch (e) { return; }
+}
+
+function pulihkanPosisi() {
+  if (location.search) return;
+  try {
+    const qs = sessionStorage.getItem(KUNCI_POSISI);
+    if (qs && qs.startsWith('?')) history.replaceState(null, '', `/project${qs}`);
+  } catch (e) { return; }
+}
+
 async function muatProject(kode) {
   state.kode = kode;
+  simpanPosisi();
   tampilPesan('');
   tampilMode('detail');
   $('tbl-so').innerHTML = '<tbody><tr><td class="loading">Memuat data project…</td></tr></tbody>';
@@ -153,7 +168,7 @@ async function muatProject(kode) {
     if (state.kode !== kode) return;
     state.so = data.so;
     renderHeader(data.header);
-    renderSo(data.so);
+    renderSo(data.so, data.header);
   } catch (e) {
     if (state.kode !== kode) return;
     $('project-view').hidden = true;
@@ -261,6 +276,7 @@ function terapkanFilter(ganti = true) {
 async function muatDaftar() {
   const no = ++daftar.no;
   state.kode = null;
+  simpanPosisi();
   daftar.qs = qsDaftar();
   tampilPesan('');
   tampilMode('daftar');
@@ -516,14 +532,24 @@ function badgeSo(r) {
   return b.join(' ');
 }
 
-function renderSo(rows) {
+const desimal = v => ada(v) ? new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v)) : STRIP;
+
+function selOmzetSo(o) {
+  if (!o) return `<td class="num">${STRIP}</td>`;
+  const valas = ada(o.nilai_valas) ? ` title="${desimal(o.nilai_valas)}"` : '';
+  return `<td class="num omzet-so"${valas}><div>${angka(o.nilai)}</div><div class="small muted">${bulan(o.bulan)}</div></td>`;
+}
+
+function renderSo(rows, h = {}) {
+  const valas = h.ada_valas ? (rows.find(r => r.kontrak_valas !== undefined) || {}).currency_code || 'USD' : null;
+  const nValas = valas ? 3 : 0;
   const nOmzet = Math.max(1, ...rows.map(r => r.omzet.length));
   const omzetHead = Array.from({ length: nOmzet }, (_, i) => `<th class="num">Omzet ${i + 1}</th>`).join('');
   const head = `
     <thead>
       <tr class="grp">
         <th class="g-so sticky" colspan="1"></th>
-        <th class="g-so" colspan="16">Sales Order</th>
+        <th class="g-so" colspan="${16 + nValas}">Sales Order</th>
         <th class="g-omzet" colspan="${nOmzet + 2}">Omzet</th>
         <th class="g-komisi" colspan="6">Komisi</th>
         <th></th>
@@ -531,18 +557,23 @@ function renderSo(rows) {
       <tr>
         <th class="sticky">Sales Order</th>
         <th>Status</th><th>Order Date</th><th>External Doc No</th><th>Company</th><th>TOP</th><th>Sales</th><th>Arsitek</th>
-        <th>Kontraktor</th><th>PMSM</th><th>Currency</th><th class="num">Total Kontrak</th><th class="num">Nilai SO</th>
+        <th>Kontraktor</th><th>PMSM</th><th>Currency</th>
+        ${valas ? `<th class="num">Kurs</th><th class="num">Total Kontrak (${esc(valas)})</th><th class="num">Nilai SO (${esc(valas)})</th>` : ''}
+        <th class="num">Total Kontrak</th><th class="num">Nilai SO</th>
         <th>Paid × Kontrak</th><th>FG Finish</th><th>Shipment</th><th>FG Tagih</th>
         <th class="sep">Tanggal</th>${omzetHead}<th class="num">Cash In</th>
         <th class="sep num">% Komisi Sales</th><th class="num">Nilai Komisi</th><th class="num">% Komisi Tim</th>
-        <th class="num">Nilai Komisi Tim</th><th>Tgl Keluar Komisi</th><th>Bulan Komisi</th>
+        <th class="num">Nilai Komisi Tim</th><th>Tanggal Terakhir Pelunasan</th><th>Bulan Komisi</th>
         <th class="sep"></th>
       </tr>
     </thead>`;
   const body = rows.map(r => {
-    const omzet = Array.from({ length: nOmzet }, (_, i) => `<td class="num">${r.omzet[i] ? angka(r.omzet[i].nilai) : STRIP}</td>`).join('');
+    const omzet = Array.from({ length: nOmzet }, (_, i) => selOmzetSo(r.omzet[i])).join('');
     const k = r.komisi || {};
-    const komisiNull = !r.is_closed ? 'title="Komisi muncul setelah SO lunas 100%"' : '';
+    const kolomValas = !valas ? '' : r.kontrak_valas === undefined
+      ? `<td class="num">${STRIP}</td><td class="num">${STRIP}</td><td class="num">${STRIP}</td>`
+      : `<td class="num">${ada(r.kurs) ? fmtQty.format(r.kurs) : '<span class="badge b-amber">Kurs kosong</span>'}</td>
+        <td class="num">${desimal(r.kontrak_valas)}</td><td class="num">${desimal(r.nilai_so_valas)}</td>`;
     return `
       <tr class="so-row" data-so="${esc(r.so_no)}">
         <td class="sticky"><span class="so-no">${PANAH}${esc(r.so_no)}</span></td>
@@ -556,6 +587,7 @@ function renderSo(rows) {
         <td>${teks(r.kontraktor)}</td>
         <td>${teks(r.pmsm)}</td>
         <td>${teks(r.currency_code || 'IDR')}</td>
+        ${kolomValas}
         <td class="num">${angka(r.kontrak)}</td>
         <td class="num">${angka(r.nilai_so)}</td>
         <td>${barPersen(r.pct_paid)}</td>
@@ -565,10 +597,10 @@ function renderSo(rows) {
         <td class="sep" title="${r.omzet.length ? '' : 'Belum mencapai DP sesuai TOP'}">${tanggal(r.omzet.length ? r.omzet[0].tanggal : null)}</td>
         ${omzet}
         <td class="num">${angka(r.paid)}</td>
-        <td class="sep num" ${komisiNull}>${persenKomisi(k.pct_komisi)}</td>
-        <td class="num" ${komisiNull}>${angka(k.nilai_komisi)}</td>
-        <td class="num" ${komisiNull}>${persenKomisi(k.pct_tim)}</td>
-        <td class="num" ${komisiNull}>${angka(k.nilai_tim)}</td>
+        <td class="sep num">${persenKomisi(k.pct_komisi)}</td>
+        <td class="num">${angka(k.nilai_komisi)}</td>
+        <td class="num">${persenKomisi(k.pct_tim)}</td>
+        <td class="num">${angka(k.nilai_tim)}</td>
         <td>${tanggal(k.tanggal_keluar_komisi)}</td>
         <td>${bulan(k.bulan_komisi)}</td>
         <td class="sep"><button class="btn-sm" data-dokumen="${esc(r.so_no)}">Proforma / Invoice</button></td>
@@ -596,9 +628,20 @@ async function toggleLines(tr) {
   try {
     const rows = await ambilJson(`/api/so/${encodeURIComponent(so)}/lines`);
     box.innerHTML = renderLines(so, rows);
+    bekukan(box.querySelector('.tbl-lines'));
   } catch (e) {
     box.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
   }
+}
+
+function bekukan(tbl) {
+  if (!tbl) return;
+  const head = [...tbl.querySelectorAll('thead th.beku')];
+  let kiri = 0;
+  const posisi = head.map(th => { const x = kiri; kiri += th.getBoundingClientRect().width; return x; });
+  tbl.querySelectorAll('tr').forEach(tr => {
+    tr.querySelectorAll('.beku').forEach((sel, i) => { sel.style.left = `${posisi[i] ?? 0}px`; });
+  });
 }
 
 function aturLebarDetail() {
@@ -612,8 +655,8 @@ function renderLines(so, rows) {
   if (!rows.length) return `<div class="loading">SO ${esc(so)} belum punya sales lines.</div>`;
   const body = rows.map(r => `
     <tr>
-      <td>${teks(r.item_no)}</td>
-      <td>${teks(r.nama_item)}</td>
+      <td class="beku">${teks(r.item_no)}</td>
+      <td class="beku beku-akhir beku-teks" title="${esc(r.nama_item || '')}">${teks(r.nama_item)}</td>
       <td class="num">${ukuran(r.lebar)}</td>
       <td class="num">${ukuran(r.tinggi)}</td>
       <td class="num">${qty(r.qty)}</td>
@@ -631,10 +674,10 @@ function renderLines(so, rows) {
     </tr>`).join('');
   return `
     <div class="detail-title">Sales lines ${esc(so)} · ${rows.length} baris</div>
-    <div class="table-wrap">
-      <table class="tbl">
+    <div class="table-wrap lines-wrap">
+      <table class="tbl tbl-lines">
         <thead><tr>
-          <th>Item No</th><th>Nama Item</th><th class="num">Lebar</th><th class="num">Tinggi</th><th class="num">Qty</th>
+          <th class="beku">Item No</th><th class="beku beku-akhir">Nama Item</th><th class="num">Lebar</th><th class="num">Tinggi</th><th class="num">Qty</th>
           <th class="num">Harga</th><th class="num">Nilai</th><th>Tanggal Output</th><th class="num">Qty Output</th>
           <th>Tanggal Shipment</th><th class="num">Qty Shipment</th><th>Prod Order No</th><th>Due Date Finish</th>
           <th>FG Finish</th><th class="num">Qty Tagih</th><th>Shipment</th>
@@ -777,7 +820,10 @@ function tutupModal() {
 
 document.addEventListener('DOMContentLoaded', () => {
   setupCari();
-  window.addEventListener('resize', aturLebarDetail);
+  window.addEventListener('resize', () => {
+    aturLebarDetail();
+    document.querySelectorAll('.tbl-lines').forEach(bekukan);
+  });
 
   $('tbl-so').addEventListener('click', e => {
     const btn = e.target.closest('[data-dokumen]');
@@ -794,6 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('modal-dokumen').hidden) tutupModal(); });
 
   setupDaftar();
+  pulihkanPosisi();
   window.addEventListener('popstate', () => {
     tutupModal();
     tutupLaci();
