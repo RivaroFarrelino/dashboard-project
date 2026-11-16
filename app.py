@@ -279,6 +279,8 @@ def api_omzet():
 
 
 PERIODE_HARI = {"30": 30, "90": 90, "180": 180}
+PPN = 1.11
+MAKS_ITEM_TAGIH = 500
 FPPP_BRAND = {
     "A": "ASTA", "B": "AST", "C": "RSD", "D": "AST", "E": "RSD", "F": "ABX", "G": "MAX", "H": "ASTA",
     "I": "POL", "J": "MAX", "K": "POL", "L": "MAX", "M": "RAE", "N": "RAS", "O": "MAX", "P": "CAR",
@@ -343,7 +345,8 @@ def api_penagihan():
     ringkas = db.query_one(
         "SELECT COUNT(*) AS jml, COALESCE(SUM(l.line_amount), 0) AS nilai, "
         "COALESCE(SUM(t.is_ticked = 1), 0) AS jml_tagih, "
-        "COALESCE(SUM(IF(t.is_ticked = 1, l.line_amount, 0)), 0) AS nilai_tagih "
+        "COALESCE(SUM(IF(t.is_ticked = 1, l.line_amount, 0)), 0) AS nilai_tagih, "
+        "COALESCE(SUM(IF(t.is_ticked = 1, t.nilai_tagih, 0)), 0) AS nominal_tagih "
         + FROM_PENAGIHAN + where,
         params,
     )
@@ -357,7 +360,7 @@ def api_penagihan():
         "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
         "l.line_amount AS nilai, " + FPPP_NO + " AS fppp_no, " + FPPP_KODE + " AS fppp_kode, o.prod_order_no, "
         "o.qty_output, o.tgl_output, h.external_document_no AS quo, h.project_code, h.project_name, "
-        "h.sell_to_customer_name AS customer, COALESCE(t.is_ticked, 0) AS is_ticked, t.updated_by, "
+        "h.sell_to_customer_name AS customer, COALESCE(t.is_ticked, 0) AS is_ticked, t.nilai_tagih, t.updated_by, "
         "DATE_FORMAT(t.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at "
         + FROM_PENAGIHAN + where + filter_status
         + "ORDER BY o.tgl_output DESC, l.document_no, l.line_no LIMIT %s OFFSET %s",
@@ -366,47 +369,129 @@ def api_penagihan():
     return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN, rows=rows)
 
 
+def _kunci_item(items):
+    kunci, lihat = [], set()
+    for it in (items or [])[:MAKS_ITEM_TAGIH]:
+        try:
+            k = (str(it["so_no"])[:20], int(it["line_no"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if k not in lihat:
+            lihat.add(k)
+            kunci.append(k)
+    return kunci
+
+
+def _baris_tagih(kunci):
+    kondisi = " OR ".join(["(l.document_no = %s AND l.line_no = %s)"] * len(kunci))
+    rows = db.query(
+        "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
+        "l.line_amount, COALESCE(t.is_ticked, 0) AS is_ticked "
+        "FROM bc_sales_line l LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
+        "WHERE l.brand = %s AND (" + kondisi + ")",
+        [BRAND] + [v for k in kunci for v in k],
+    )
+    urut = {k: i for i, k in enumerate(kunci)}
+    return sorted(rows, key=lambda r: urut.get((r["so_no"], r["line_no"]), 0))
+
+
+def _nilai_ppn(line_amount):
+    return float(round(float(line_amount or 0) * PPN))
+
+
+@app.post("/api/penagihan/hitung")
+def api_penagihan_hitung():
+    kunci = _kunci_item((request.get_json(silent=True) or {}).get("items"))
+    if not kunci:
+        return jsonify(pesan="Tidak ada item yang dipilih."), 400
+    baris = [b for b in _baris_tagih(kunci) if not b["is_ticked"]]
+    if not baris:
+        return jsonify(pesan="Semua item terpilih sudah ditandai ditagih."), 400
+    so_list = list(dict.fromkeys(b["so_no"] for b in baris))
+    tanda = ", ".join(["%s"] * len(so_list))
+    header = {r["so_no"]: r for r in db.query(
+        "SELECT no AS so_no, sell_to_customer_name AS customer, project_code, payment_terms_code AS top, "
+        "contract_amount AS kontrak FROM bc_sales_header WHERE no IN (" + tanda + ")",
+        so_list,
+    )}
+    dp = {r["so_no"]: float(r["dp"] or 0) for r in db.query(
+        "SELECT pi.nomor_so AS so_no, SUM(x.amount) AS dp FROM ("
+        "SELECT document_no AS pi_no, amount FROM bc_cashier_in_line WHERE brand = %s "
+        "UNION ALL SELECT target_pi, amount FROM app_nopay_alloc WHERE amount > 0 "
+        "UNION ALL SELECT source_pi, -amount FROM app_nopay_alloc WHERE amount > 0 AND source_pi IS NOT NULL"
+        ") x JOIN bc_proforma_header pi ON pi.no = x.pi_no "
+        "WHERE pi.nomor_so IN (" + tanda + ") "
+        "AND (pi.proforma_type LIKE %s OR pi.external_document_no LIKE %s) "
+        "GROUP BY pi.nomor_so",
+        [BRAND] + so_list + ["%DP%", "%-DP%"],
+    )}
+    sudah = {r["so_no"]: float(r["nominal"] or 0) for r in db.query(
+        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount * %s))) AS nominal "
+        "FROM app_fg_tagih t JOIN bc_sales_line l ON l.document_no = t.so_no AND l.line_no = t.line_no "
+        "WHERE t.is_ticked = 1 AND t.so_no IN (" + tanda + ") GROUP BY t.so_no",
+        [PPN] + so_list,
+    )}
+    hasil = []
+    for so_no in so_list:
+        h = header.get(so_no) or {}
+        kontrak = float(h.get("kontrak") or 0)
+        sisa = float(max(0, round(kontrak - dp.get(so_no, 0) - sudah.get(so_no, 0))))
+        jalan = sisa
+        items = []
+        for b in (x for x in baris if x["so_no"] == so_no):
+            nilai = _nilai_ppn(b["line_amount"])
+            nominal = min(nilai, jalan)
+            jalan = jalan - nominal
+            items.append({"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"],
+                          "nama_item": b["nama_item"], "qty": b["qty"], "nilai": nilai, "nominal": nominal})
+        hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
+                      "top": h.get("top"), "kontrak": kontrak, "dp": dp.get(so_no, 0),
+                      "sudah_ditagih": sudah.get(so_no, 0), "sisa": sisa, "items": items})
+    return jsonify(so=hasil)
+
+
 @app.post("/api/penagihan/tandai")
 def api_penagihan_tandai():
     data = request.get_json(silent=True) or {}
     items = data.get("items") or []
     tagih = bool(data.get("tagih"))
-    kunci = []
-    for it in items[:500]:
-        try:
-            kunci.append((str(it["so_no"])[:20], int(it["line_no"])))
-        except (KeyError, TypeError, ValueError):
-            continue
+    kunci = _kunci_item(items)
     if not kunci:
         return jsonify(pesan="Tidak ada item yang dipilih."), 400
-    kondisi = " OR ".join(["(l.document_no = %s AND l.line_no = %s)"] * len(kunci))
-    params = [v for k in kunci for v in k]
-    baris = db.query(
-        "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.quantity AS qty, COALESCE(t.is_ticked, 0) AS is_ticked "
-        "FROM bc_sales_line l LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
-        "WHERE l.brand = %s AND (" + kondisi + ")",
-        [BRAND] + params,
-    )
+    nominal = {}
+    if tagih:
+        for it in items[:MAKS_ITEM_TAGIH]:
+            try:
+                nilai = round(float(it["nominal"]), 2)
+                k = (str(it["so_no"])[:20], int(it["line_no"]))
+            except (KeyError, TypeError, ValueError):
+                return jsonify(pesan="Nominal tagih belum diisi untuk semua item."), 400
+            if nilai < 0 or nilai > 1e13:
+                return jsonify(pesan="Nominal tagih tidak boleh minus."), 400
+            nominal[k] = nilai
+    baris = _baris_tagih(kunci)
     ubah = [b for b in baris if bool(b["is_ticked"]) != tagih]
     oleh = g.user["username"]
     if ubah:
         perintah = []
         for b in ubah:
-            qty = b["qty"] if tagih else 0
+            k = (b["so_no"], b["line_no"])
+            nilai = nominal.get(k) if tagih else None
             perintah.append((
-                "INSERT INTO app_fg_tagih (so_no, line_no, item_no, qty_tagih, is_ticked, updated_by) "
-                "VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE item_no = VALUES(item_no), "
-                "qty_tagih = VALUES(qty_tagih), is_ticked = VALUES(is_ticked), updated_by = VALUES(updated_by)",
-                (b["so_no"], b["line_no"], b["item_no"], qty, 1 if tagih else 0, oleh),
+                "INSERT INTO app_fg_tagih (so_no, line_no, item_no, qty_tagih, nilai_tagih, is_ticked, updated_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE item_no = VALUES(item_no), "
+                "qty_tagih = VALUES(qty_tagih), nilai_tagih = VALUES(nilai_tagih), is_ticked = VALUES(is_ticked), "
+                "updated_by = VALUES(updated_by)",
+                (b["so_no"], b["line_no"], b["item_no"], b["qty"] if tagih else 0, nilai, 1 if tagih else 0, oleh),
             ))
             perintah.append((
-                "INSERT INTO app_fg_tagih_log (so_no, line_no, item_no, action, qty, done_by) "
-                "VALUES (%s, %s, %s, %s, %s, %s)",
-                (b["so_no"], b["line_no"], b["item_no"], "TICK" if tagih else "UNTICK", b["qty"], oleh),
+                "INSERT INTO app_fg_tagih_log (so_no, line_no, item_no, action, qty, nilai, done_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (b["so_no"], b["line_no"], b["item_no"], "TICK" if tagih else "UNTICK", b["qty"], nilai, oleh),
             ))
         db.transaksi(perintah)
         log.info("Penagihan FG: %s item di%s oleh %s", len(ubah), "tandai" if tagih else "batalkan", oleh)
-    return jsonify(diubah=len(ubah), oleh=oleh)
+    return jsonify(diubah=len(ubah), oleh=oleh, nominal={f"{k[0]}|{k[1]}": v for k, v in nominal.items()})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), debug=False)
