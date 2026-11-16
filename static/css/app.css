@@ -397,7 +397,13 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 .input-nominal.input-sub { font-weight: 600; }
 .input-nominal.input-total { width: 200px; height: 40px; font-size: 18px; font-weight: 700; text-align: left; }
 .tagih-so { margin-bottom: 18px; }
-.tagih-so-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.tagih-so-head { margin-bottom: 10px; }
+.tagih-so-judul { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.tagih-meta { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, .6fr) minmax(0, 2fr); gap: 4px 20px; margin: 8px 0 10px; padding: 10px 12px; background: var(--surface-2); border-radius: 10px; }
+.tagih-meta div { min-width: 0; }
+.tagih-meta dt { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.tagih-meta dd { margin: 0; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+@media (max-width: 720px) { .tagih-meta { grid-template-columns: 1fr 1fr; } .tagih-meta .lebar { grid-column: 1 / -1; } }
 .tagih-ringkas { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); }
 .tagih-ringkas b { color: var(--text); font-variant-numeric: tabular-nums; }
 .tagih-info { margin-top: 8px; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 500; }
@@ -543,4 +549,40 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 }
 @media (prefers-reduced-motion: reduce) {
   .laci-latar, .laci-panel { transition: none; }
+}
+
+.pi-list { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.pi-list span { white-space: nowrap; }
+.pi-list i { font-style: normal; color: var(--muted); margin-left: 6px; font-size: 11px; }
+.tagih-meta .pi-list { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+
+.lines-wrap { max-height: min(62vh, 560px); overflow: auto; }
+.tbl-lines .beku-teks { max-width: 260px; }
+.omzet-so .small { margin-top: 2px; font-size: 11px; }
+
+.saring-omzet { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.rentang, .pil-select {
+  display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border: 1px solid #d9dce5;
+  border-radius: 999px; background: var(--surface); transition: border-color .15s, box-shadow .15s;
+}
+.rentang:hover, .pil-select:hover { border-color: #9ea3b3; }
+.rentang:focus-within, .pil-select:focus-within { border-color: var(--text); box-shadow: 0 0 0 3px rgba(29, 33, 48, .06); }
+.rentang > svg, .pil-select > svg { width: 15px; height: 15px; color: var(--muted); }
+.rentang input {
+  border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--text); outline: none;
+  padding: 0; width: 120px; font-variant-numeric: tabular-nums;
+}
+.rentang input::-webkit-calendar-picker-indicator { opacity: .45; cursor: pointer; }
+.rentang-sep { color: var(--muted); }
+.pil-select select {
+  border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--text); outline: none;
+  cursor: pointer; max-width: 220px; padding-right: 2px;
+}
+.pil-select:has(select.ada) { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+.tbl.memuat tbody, .sales-list.memuat { opacity: .5; transition: opacity .15s; }
+@media (max-width: 720px) {
+  .rentang { width: 100%; justify-content: space-between; }
+  .rentang input { width: auto; flex: 1; min-width: 0; }
+  .pil-select { width: 100%; }
+  .pil-select select { max-width: none; flex: 1; }
 }
