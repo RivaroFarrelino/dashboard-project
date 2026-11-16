@@ -18,43 +18,18 @@
 <section id="pesan" class="alert" hidden></section>
 
 <section id="daftar-view" hidden>
-  <div class="filter-bar card filter-project">
-    <div class="search search-sm">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input id="f-q" type="search" autocomplete="off" placeholder="Cari kode, nama project, customer, no SO">
+  <div class="saring">
+    <div class="saring-atas">
+      <div class="saring-cari">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="f-q" type="search" autocomplete="off" placeholder="Cari kode, nama project, customer, no SO">
+      </div>
+      <button type="button" class="btn-filter" id="btn-filter" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        Filter<span class="btn-filter-n" id="f-n" hidden></span>
+      </button>
     </div>
-    <label class="select-wrap inline"><span class="muted small">Sales</span>
-      <select id="f-sales"><option value="">Semua</option></select>
-    </label>
-    <label class="select-wrap inline"><span class="muted small">Bayar</span>
-      <select id="f-bayar">
-        <option value="">Semua</option>
-        <option value="belum">Belum bayar</option>
-        <option value="dp">Sudah DP</option>
-        <option value="lunas">Lunas</option>
-      </select>
-    </label>
-    <label class="select-wrap inline"><span class="muted small">Produksi</span>
-      <select id="f-produksi">
-        <option value="">Semua</option>
-        <option value="belum">Belum mulai</option>
-        <option value="sebagian">Sebagian</option>
-        <option value="selesai">Selesai</option>
-      </select>
-    </label>
-    <label class="select-wrap inline"><span class="muted small">Kirim</span>
-      <select id="f-kirim">
-        <option value="">Semua</option>
-        <option value="belum">Belum kirim</option>
-        <option value="sebagian">Sebagian</option>
-        <option value="selesai">Selesai</option>
-      </select>
-    </label>
-    <label class="select-wrap inline"><span class="muted small">Periode SO</span>
-      <select id="f-tahun"><option value="">Semua tahun</option></select>
-      <select id="f-bulan" disabled><option value="">Semua bulan</option></select>
-    </label>
-    <button class="btn-sm" id="f-reset" hidden>Reset</button>
+    <div class="saring-aktif" id="f-aktif" hidden></div>
   </div>
 
   <div class="card">
@@ -107,6 +82,45 @@
     </div>
   </div>
 </section>
+
+<div class="laci" id="laci" hidden>
+  <div class="laci-latar" data-tutup-laci></div>
+  <aside class="laci-panel" role="dialog" aria-modal="true" aria-labelledby="laci-judul">
+    <div class="laci-head">
+      <span class="laci-pegangan" aria-hidden="true"></span>
+      <h2 id="laci-judul">Filter</h2>
+      <button type="button" class="btn-icon" id="laci-tutup" data-tutup-laci aria-label="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="laci-isi">
+      <section class="grup-saring">
+        <h4>Periode SO</h4>
+        <div class="chips" id="c-tahun" data-f="tahun"></div>
+        <div class="chips chips-bulan" id="c-bulan" data-f="bulan" hidden></div>
+      </section>
+      <section class="grup-saring">
+        <h4>Status bayar</h4>
+        <div class="chips" id="c-bayar" data-f="bayar"></div>
+      </section>
+      <section class="grup-saring">
+        <h4>Produksi</h4>
+        <div class="chips" id="c-produksi" data-f="produksi"></div>
+      </section>
+      <section class="grup-saring">
+        <h4>Pengiriman</h4>
+        <div class="chips" id="c-kirim" data-f="kirim"></div>
+      </section>
+      <section class="grup-saring">
+        <h4>Sales</h4>
+        <div class="chips" id="c-sales" data-f="sales"></div>
+        <button type="button" class="link-lagi" id="sales-lagi" hidden></button>
+      </section>
+    </div>
+    <div class="laci-kaki">
+      <button type="button" class="link-hapus" id="laci-hapus">Hapus filter</button>
+      <button type="button" class="btn-gelap" id="laci-terap">Tampilkan project</button>
+    </div>
+  </aside>
+</div>
 
 <div class="modal" id="modal-dokumen" hidden>
   <div class="modal-box">
