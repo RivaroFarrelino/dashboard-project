@@ -107,6 +107,112 @@ def api_projects():
     return jsonify(rows)
 
 
+UKURAN_DAFTAR = 50
+URUT_DAFTAR = {
+    "kode": "kode", "nama": "nama", "customer": "customer", "sales": "sales", "jml_so": "jml_so",
+    "kontrak": "kontrak", "pct_paid": "pct_paid", "pct_fg": "pct_fg", "pct_ship": "pct_ship",
+    "sisa_ots": "sisa_ots", "so_terakhir": "so_terakhir",
+}
+TGL_SO = "COALESCE(h.order_date, h.posting_date)"
+SQL_DAFTAR = (
+    "SELECT h.project_code AS kode, MAX(h.project_name) AS nama, MAX(h.sell_to_customer_name) AS customer, "
+    "GROUP_CONCAT(DISTINCT h.sales_dim5 ORDER BY h.sales_dim5 SEPARATOR ', ') AS sales, "
+    "COUNT(*) AS jml_so, SUM(h.contract_amount) AS kontrak, SUM(COALESCE(c.paid, 0)) AS paid, "
+    "IF(SUM(h.contract_amount) > 0, SUM(COALESCE(c.paid, 0)) / SUM(h.contract_amount) * 100, NULL) AS pct_paid, "
+    "IF(SUM(COALESCE(c.qty_fg, 0)) > 0, SUM(COALESCE(c.qty_fg_finish, 0)) / SUM(c.qty_fg) * 100, NULL) AS pct_fg, "
+    "IF(SUM(COALESCE(c.qty_item, 0)) > 0, SUM(COALESCE(c.qty_ship, 0)) / SUM(c.qty_item) * 100, NULL) AS pct_ship, "
+    "SUM(h.contract_amount) - SUM(COALESCE(i.inv, 0)) AS sisa_ots, "
+    "MAX(" + TGL_SO + ") AS so_terakhir "
+    "FROM bc_sales_header h "
+    "LEFT JOIN app_calc_so c ON c.so_no = h.no "
+    "LEFT JOIN (SELECT so_no, SUM(nilai_bersih) AS inv FROM app_psi_link "
+    "WHERE psi_status IN ('AKTIF', 'POTONG_DP') AND so_no IS NOT NULL GROUP BY so_no) i ON i.so_no = h.no "
+    "WHERE h.brand = %s AND h.project_code IS NOT NULL "
+    "GROUP BY h.project_code "
+)
+HAVING_STATUS = {
+    "bayar": {
+        "belum": "SUM(COALESCE(c.paid, 0)) <= 0",
+        "dp": "SUM(COALESCE(c.paid, 0)) > 0 AND SUM(h.contract_amount > 0 AND c.lunas_date IS NULL) > 0",
+        "lunas": "SUM(h.contract_amount > 0) > 0 AND SUM(h.contract_amount > 0 AND c.lunas_date IS NULL) = 0",
+    },
+    "produksi": {
+        "belum": "SUM(COALESCE(c.qty_fg, 0)) > 0 AND SUM(COALESCE(c.qty_fg_finish, 0)) = 0",
+        "sebagian": "SUM(COALESCE(c.qty_fg_finish, 0)) > 0 AND SUM(COALESCE(c.qty_fg_finish, 0)) < SUM(COALESCE(c.qty_fg, 0))",
+        "selesai": "SUM(COALESCE(c.qty_fg, 0)) > 0 AND SUM(COALESCE(c.qty_fg_finish, 0)) >= SUM(COALESCE(c.qty_fg, 0))",
+    },
+    "kirim": {
+        "belum": "SUM(COALESCE(c.qty_item, 0)) > 0 AND SUM(COALESCE(c.qty_ship, 0)) = 0",
+        "sebagian": "SUM(COALESCE(c.qty_ship, 0)) > 0 AND SUM(COALESCE(c.qty_ship, 0)) < SUM(COALESCE(c.qty_item, 0))",
+        "selesai": "SUM(COALESCE(c.qty_item, 0)) > 0 AND SUM(COALESCE(c.qty_ship, 0)) >= SUM(COALESCE(c.qty_item, 0))",
+    },
+}
+
+
+@app.get("/api/projects/opsi")
+def api_projects_opsi():
+    sales = db.query(
+        "SELECT DISTINCT sales_dim5 AS sales FROM bc_sales_header "
+        "WHERE brand = %s AND sales_dim5 IS NOT NULL AND sales_dim5 <> '' ORDER BY sales_dim5",
+        (BRAND,),
+    )
+    tgl = TGL_SO.replace("h.", "")
+    tahun = db.query(
+        "SELECT DISTINCT YEAR(" + tgl + ") AS tahun FROM bc_sales_header "
+        "WHERE brand = %s AND project_code IS NOT NULL AND " + tgl + " IS NOT NULL ORDER BY tahun DESC",
+        (BRAND,),
+    )
+    return jsonify(sales=[r["sales"] for r in sales], tahun=[r["tahun"] for r in tahun])
+
+
+@app.get("/api/projects/daftar")
+def api_projects_daftar():
+    a = request.args
+    having, params = [], [BRAND]
+    q = a.get("q", "").strip()[:100]
+    if q:
+        like = f"%{q}%"
+        having.append("SUM(h.project_code LIKE %s OR h.project_name LIKE %s OR h.sell_to_customer_name LIKE %s OR h.no LIKE %s) > 0")
+        params += [like] * 4
+    sales = a.get("sales", "").strip()[:50]
+    if sales:
+        having.append("SUM(h.sales_dim5 = %s) > 0")
+        params.append(sales)
+    for kunci, pilihan in HAVING_STATUS.items():
+        nilai = a.get(kunci, "")
+        if nilai in pilihan:
+            having.append(pilihan[nilai])
+    tahun, bulan = a.get("tahun", ""), a.get("bulan", "")
+    if re.fullmatch(r"\d{4}", tahun):
+        if re.fullmatch(r"\d{1,2}", bulan) and 1 <= int(bulan) <= 12:
+            having.append("SUM(YEAR(" + TGL_SO + ") = %s AND MONTH(" + TGL_SO + ") = %s) > 0")
+            params += [int(tahun), int(bulan)]
+        else:
+            having.append("SUM(YEAR(" + TGL_SO + ") = %s) > 0")
+            params.append(int(tahun))
+    sql = SQL_DAFTAR + ("HAVING " + " AND ".join(having) + " " if having else "")
+    urut = URUT_DAFTAR.get(a.get("urut", ""), "so_terakhir")
+    arah = "ASC" if a.get("arah") == "asc" else "DESC"
+    try:
+        halaman = max(1, int(a.get("halaman", "1")))
+    except ValueError:
+        halaman = 1
+    rows = db.query(
+        "SELECT x.*, COUNT(*) OVER () AS total FROM (" + sql + ") x "
+        f"ORDER BY {urut} {arah}, kode LIMIT %s OFFSET %s",
+        params + [UKURAN_DAFTAR, (halaman - 1) * UKURAN_DAFTAR],
+    )
+    if rows:
+        total = rows[0]["total"]
+    elif halaman > 1:
+        total = db.query_one("SELECT COUNT(*) AS n FROM (" + sql + ") x", params)["n"]
+    else:
+        total = 0
+    for r in rows:
+        r.pop("total", None)
+    return jsonify(rows=rows, total=total, halaman=halaman, ukuran=UKURAN_DAFTAR)
+
+
 @app.get("/api/project/<kode>")
 def api_project(kode):
     so_rows = db.query(
