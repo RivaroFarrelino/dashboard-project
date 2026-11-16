@@ -432,10 +432,6 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
   .tbl .beku { position: static; box-shadow: none; }
 }
 
-.filter-project { margin-bottom: 16px; }
-.filter-project .select-wrap.inline select { min-width: 0; }
-.filter-project #f-sales { max-width: 200px; }
-.filter-project #f-tahun, .filter-project #f-bulan { min-width: 0; width: auto; }
 .tbl-daftar thead th.sortir { cursor: pointer; user-select: none; }
 .tbl-daftar thead th.sortir:hover, .tbl-daftar thead th.sortir.aktif { color: var(--accent); }
 .tbl-daftar tbody tr.baris-project { cursor: pointer; }
@@ -451,3 +447,100 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 .mini-bar.full i { background: var(--green, #1f9d6a); }
 .btn-kembali { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 12px; }
 .btn-kembali svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+.saring { margin-bottom: 16px; }
+.saring-atas { display: flex; gap: 10px; align-items: center; }
+.saring-cari { position: relative; flex: 1; max-width: 520px; }
+.saring-cari > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); width: 17px; height: 17px; }
+.saring-cari input {
+  width: 100%; height: 42px; padding: 0 14px 0 40px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); font: inherit; font-size: 14px; color: var(--text); outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.saring-cari input::placeholder { color: #9aa0b1; }
+.saring-cari input:hover { border-color: #d3d6e0; }
+.saring-cari input:focus { border-color: var(--text); box-shadow: 0 0 0 3px rgba(29, 33, 48, .06); }
+.btn-filter {
+  display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); font: inherit; font-size: 14px; font-weight: 500;
+  color: var(--text); cursor: pointer; transition: border-color .15s, background .15s;
+}
+.btn-filter svg { width: 17px; height: 17px; }
+.btn-filter:hover { border-color: var(--text); }
+.btn-filter.ada { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+.btn-filter-n {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--text); color: #fff;
+  font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums;
+}
+.saring-aktif { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.pil-aktif {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px 0 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); font: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+}
+.pil-aktif svg { width: 13px; height: 13px; color: var(--muted); }
+.pil-aktif:hover { border-color: var(--text); }
+.pil-aktif:hover svg { color: var(--text); }
+.link-hapus, .link-lagi {
+  border: 0; background: none; padding: 4px 2px; font: inherit; font-size: 13px; font-weight: 500; color: var(--text);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #c3c7d3; cursor: pointer;
+}
+.link-hapus:hover, .link-lagi:hover { text-decoration-color: currentColor; }
+.link-hapus:disabled { color: #b4b8c5; cursor: default; text-decoration-color: transparent; }
+.link-lagi { color: var(--accent); text-decoration: none; margin-top: 12px; padding: 0; }
+.link-lagi:hover { text-decoration: underline; }
+
+.laci { position: fixed; inset: 0; z-index: 60; }
+.laci-latar { position: absolute; inset: 0; background: rgba(20, 24, 40, .32); opacity: 0; transition: opacity .2s ease; }
+.laci-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(420px, 100%); background: var(--surface);
+  display: flex; flex-direction: column; box-shadow: -12px 0 40px rgba(20, 24, 40, .12);
+  transform: translateX(100%); transition: transform .22s cubic-bezier(.2, .8, .2, 1);
+}
+.laci.buka .laci-latar { opacity: 1; }
+.laci.buka .laci-panel { transform: none; }
+.laci-head { position: relative; display: flex; align-items: center; justify-content: center; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+.laci-head h2 { font-size: 15px; font-weight: 600; }
+.laci-head .btn-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
+.laci-pegangan { display: none; }
+.laci-isi { flex: 1; overflow-y: auto; padding: 4px 24px 24px; overscroll-behavior: contain; }
+.grup-saring { padding: 20px 0; }
+.grup-saring + .grup-saring { border-top: 1px solid #f0f1f5; }
+.grup-saring h4 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips-bulan { display: grid; grid-template-columns: repeat(6, 1fr); margin-top: 10px; }
+.chips-bulan .chip-f { padding: 0; justify-content: center; }
+.chip-f {
+  display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid #d9dce5; background: var(--surface); font: inherit; font-size: 13px; color: var(--text);
+  cursor: pointer; white-space: nowrap; transition: border-color .12s, box-shadow .12s, background .12s;
+}
+.chip-f:hover { border-color: #9ea3b3; }
+.chip-f.aktif { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); font-weight: 500; }
+.chip-f:focus-visible, .btn-filter:focus-visible, .pil-aktif:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.laci-kaki {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 24px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface);
+}
+.btn-gelap {
+  height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: var(--text); color: #fff;
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s, opacity .15s;
+  font-variant-numeric: tabular-nums;
+}
+.btn-gelap:hover { background: #000; }
+.btn-gelap:disabled { background: #c9ccd6; cursor: default; }
+.btn-gelap.menghitung { opacity: .6; }
+
+@media (max-width: 720px) {
+  .saring-cari { max-width: none; }
+  .btn-filter { padding: 0 14px; }
+  .laci-panel {
+    top: auto; left: 0; width: 100%; max-height: 88vh; border-radius: 18px 18px 0 0;
+    transform: translateY(100%); box-shadow: 0 -12px 40px rgba(20, 24, 40, .14);
+  }
+  .laci-pegangan { display: block; position: absolute; top: 7px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 99px; background: #d9dce5; }
+  .laci-isi { padding: 0 20px 16px; }
+  .laci-kaki { padding-left: 20px; padding-right: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .laci-latar, .laci-panel { transition: none; }
+}
