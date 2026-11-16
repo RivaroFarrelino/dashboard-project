@@ -63,13 +63,13 @@
     <div class="modal-head">
       <div>
         <h3 id="m-tagih-judul">Konfirmasi Penagihan</h3>
-        <div class="muted small">Nominal = nilai item, dibatasi sisa tagihan SO (kontrak − DP terbayar dari PI Down Payment − yang sudah ditagih). Nominal bisa dikoreksi.</div>
+        <div class="muted small">Nominal per item tanpa PPN (DPP). PPN 11% ditambahkan di subtotal. Total dibatasi sisa tagihan SO (kontrak − DP terbayar dari PI Down Payment − yang sudah ditagih). Semua nominal bisa dikoreksi.</div>
       </div>
       <button class="btn-icon" data-tutup-tagih aria-label="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <div class="modal-body" id="m-tagih-isi"><div class="loading">Menghitung nominal…</div></div>
     <div class="modal-foot">
-      <label class="tagih-total"><span class="muted small">Total ditagih · bisa diubah</span><input class="input-nominal input-total" id="m-tagih-total" inputmode="numeric" aria-label="Total ditagih"></label>
+      <label class="tagih-total"><span class="muted small">Total ditagih (+PPN) · bisa diubah</span><input class="input-nominal input-total" id="m-tagih-total" inputmode="numeric" aria-label="Total ditagih"></label>
       <div class="modal-aksi">
         <button type="button" class="btn" data-tutup-tagih>Batal</button>
         <button type="button" class="btn-utama btn-utama-auto" id="m-tagih-simpan" disabled>Simpan tagihan</button>
