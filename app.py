@@ -445,17 +445,15 @@ def api_penagihan_hitung():
         h = header.get(so_no) or {}
         kontrak = float(h.get("kontrak") or 0)
         sisa = float(max(0, round(kontrak - dp.get(so_no, 0) - sudah.get(so_no, 0))))
-        jalan = math.floor(sisa / (1 + PPN))
-        items = []
-        for b in (x for x in baris if x["so_no"] == so_no):
-            nilai = _nilai_item(b["line_amount"])
-            nominal = min(nilai, jalan)
-            jalan = jalan - nominal
-            items.append({"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"],
-                          "nama_item": b["nama_item"], "qty": b["qty"], "nilai": nilai, "nominal": nominal})
+        items = [{"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"], "nama_item": b["nama_item"],
+                  "qty": b["qty"], "nilai": _nilai_item(b["line_amount"])}
+                 for b in baris if b["so_no"] == so_no]
+        subtotal = sum(it["nilai"] for it in items)
+        dengan_ppn = _plus_ppn(subtotal)
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
                       "top": h.get("top"), "kontrak": kontrak, "dp": dp.get(so_no, 0),
-                      "sudah_ditagih": sudah.get(so_no, 0), "sisa": sisa, "items": items})
+                      "sudah_ditagih": sudah.get(so_no, 0), "sisa": sisa, "items": items,
+                      "subtotal": subtotal, "ppn": dengan_ppn - subtotal, "total": min(dengan_ppn, sisa)})
     return jsonify(so=hasil, ppn=PPN)
 
 
@@ -467,19 +465,26 @@ def api_penagihan_tandai():
     kunci = _kunci_item(items)
     if not kunci:
         return jsonify(pesan="Tidak ada item yang dipilih."), 400
-    nominal = {}
-    if tagih:
-        for it in items[:MAKS_ITEM_TAGIH]:
-            try:
-                nilai = round(float(it["nominal"]), 2)
-                k = (str(it["so_no"])[:20], int(it["line_no"]))
-            except (KeyError, TypeError, ValueError):
-                return jsonify(pesan="Nominal tagih belum terkirim. Muat ulang halaman (Ctrl+Shift+R) lalu coba lagi."), 400
-            if nilai < 0 or nilai > 1e13:
-                return jsonify(pesan="Nominal tagih tidak boleh minus."), 400
-            nominal[k] = _plus_ppn(nilai)
     baris = _baris_tagih(kunci)
     ubah = [b for b in baris if bool(b["is_ticked"]) != tagih]
+    nominal = {}
+    if tagih:
+        total_so = data.get("total") if isinstance(data.get("total"), dict) else {}
+        for so_no in dict.fromkeys(b["so_no"] for b in ubah):
+            try:
+                total = float(math.floor(float(total_so[so_no]) + 0.5))
+            except (KeyError, TypeError, ValueError):
+                return jsonify(pesan="Total tagihan belum terkirim. Muat ulang halaman (Ctrl+Shift+R) lalu coba lagi."), 400
+            if total < 0 or total > 1e13:
+                return jsonify(pesan="Total tagihan tidak boleh minus."), 400
+            item_so = [b for b in ubah if b["so_no"] == so_no]
+            dpp = [max(0.0, float(b["line_amount"] or 0)) for b in item_so]
+            jumlah = sum(dpp)
+            sisa = total
+            for i, b in enumerate(item_so):
+                bagian = sisa if i == len(item_so) - 1 else float(math.floor(total * (dpp[i] / jumlah if jumlah else 1 / len(item_so))))
+                nominal[(b["so_no"], b["line_no"])] = bagian
+                sisa -= bagian
     oleh = g.user["username"]
     if ubah:
         perintah = []
