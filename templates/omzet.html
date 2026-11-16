@@ -5,16 +5,31 @@
     <h1>Omzet</h1>
     <p class="muted">Omzet 1 masuk di bulan pembayaran mencapai DP sesuai TOP, omzet berikutnya di bulan kontrak berubah</p>
   </div>
-  <label class="select-wrap">
-    <span class="muted small">Bulan</span>
-    <select id="pilih-bulan"></select>
-  </label>
 </header>
+
+<div class="saring saring-omzet">
+  <div class="chips" id="cepat" role="group" aria-label="Periode cepat">
+    <button type="button" class="chip-f" data-v="bulan-ini">Bulan ini</button>
+    <button type="button" class="chip-f" data-v="bulan-lalu">Bulan lalu</button>
+    <button type="button" class="chip-f" data-v="ytd">YTD</button>
+    <button type="button" class="chip-f" data-v="tahun-lalu">Tahun lalu</button>
+  </div>
+  <div class="rentang">
+    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    <input type="date" id="f-dari" aria-label="Dari tanggal">
+    <span class="rentang-sep">–</span>
+    <input type="date" id="f-sampai" aria-label="Sampai tanggal">
+  </div>
+  <div class="pil-select">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+    <select id="f-sales" aria-label="Sales"><option value="">Semua sales</option></select>
+  </div>
+</div>
 
 <section id="pesan" class="alert" hidden></section>
 
 <div class="kpi-grid kpi-5">
-  <div class="card kpi"><div class="kpi-label">Omzet bulan ini</div><div class="kpi-value" id="k-omzet">–</div><div class="kpi-sub" id="k-delta"></div></div>
+  <div class="card kpi"><div class="kpi-label" id="k-label">Omzet bulan</div><div class="kpi-value" id="k-omzet">–</div><div class="kpi-sub" id="k-delta"></div></div>
   <div class="card kpi"><div class="kpi-label">Jumlah omzet</div><div class="kpi-value" id="k-jml">–</div><div class="kpi-sub" id="k-jml-sub"></div></div>
   <div class="card kpi"><div class="kpi-label">Rata-rata per omzet</div><div class="kpi-value" id="k-rata">–</div></div>
   <div class="card kpi"><div class="kpi-label">Omzet tahun berjalan</div><div class="kpi-value" id="k-ytd">–</div><div class="kpi-sub" id="k-ytd-sub"></div></div>
@@ -31,8 +46,8 @@
   </div>
   <div class="card">
     <div class="card-head">
-      <h3>Omzet per sales</h3>
-      <span class="muted small">Garis = batas omzet grup komisi</span>
+      <h3 id="judul-sales">Omzet per sales</h3>
+      <span class="muted small" id="info-sales">Garis = batas omzet grup komisi</span>
     </div>
     <div class="sales-list" id="list-sales"></div>
   </div>
