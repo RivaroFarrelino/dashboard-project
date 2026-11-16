@@ -58,6 +58,26 @@
   </div>
 </div>
 
+<div class="modal" id="m-tagih" hidden>
+  <div class="modal-box modal-tagih" role="dialog" aria-modal="true" aria-labelledby="m-tagih-judul">
+    <div class="modal-head">
+      <div>
+        <h3 id="m-tagih-judul">Konfirmasi Penagihan</h3>
+        <div class="muted small">Nominal = nilai item + PPN 11%, dibatasi sisa tagihan SO (kontrak − DP terbayar − yang sudah ditagih). Nominal bisa dikoreksi.</div>
+      </div>
+      <button class="btn-icon" data-tutup-tagih aria-label="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body" id="m-tagih-isi"><div class="loading">Menghitung nominal…</div></div>
+    <div class="modal-foot">
+      <label class="tagih-total"><span class="muted small">Total ditagih · bisa diubah</span><input class="input-nominal input-total" id="m-tagih-total" inputmode="numeric" aria-label="Total ditagih"></label>
+      <div class="modal-aksi">
+        <button type="button" class="btn" data-tutup-tagih>Batal</button>
+        <button type="button" class="btn-utama btn-utama-auto" id="m-tagih-simpan" disabled>Simpan tagihan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 {% endblock %}
 {% block scripts %}
