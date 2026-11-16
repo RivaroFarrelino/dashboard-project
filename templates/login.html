@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
   <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=aset_v) }}">
 </head>
 <body class="halaman-login">
   <header class="login-top">
@@ -81,6 +81,6 @@
       <p class="login-bantuan muted small">Lupa password? Hubungi admin dashboard untuk reset.</p>
     </div>
   </main>
-  <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/login.js', v=aset_v) }}"></script>
 </body>
 </html>
