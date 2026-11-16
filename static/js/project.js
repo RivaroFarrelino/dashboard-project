@@ -169,13 +169,23 @@ function tampilMode(mode) {
 }
 
 const FILTER = ['q', 'sales', 'bayar', 'produksi', 'kirim', 'tahun', 'bulan'];
+const PILIHAN = {
+  bayar: { belum: 'Belum bayar', dp: 'Sudah DP', lunas: 'Lunas' },
+  produksi: { belum: 'Belum mulai', sebagian: 'Sebagian', selesai: 'Selesai' },
+  kirim: { belum: 'Belum kirim', sebagian: 'Sebagian', selesai: 'Selesai' }
+};
+const JUDUL_PILIHAN = { bayar: 'Bayar', produksi: 'Produksi', kirim: 'Kirim' };
+const SALES_AWAL = 8;
 const KOLOM_DAFTAR = [
   ['kode', 'Kode Project'], ['nama', 'Nama Project'], ['customer', 'Customer'], ['sales', 'Sales'],
   ['jml_so', 'SO', 'num'], ['kontrak', 'Kontrak', 'num'], ['pct_paid', 'Paid', 'num'],
   ['pct_fg', 'FG Finish', 'num'], ['pct_ship', 'Shipment', 'num'], ['sisa_ots', 'Sisa OTS', 'num'],
   ['so_terakhir', 'SO Terakhir', 'num']
 ];
-const daftar = { f: {}, urut: 'so_terakhir', arah: 'desc', halaman: 1, total: 0, ukuran: 50, no: 0, opsi: false, qs: '' };
+const daftar = {
+  f: {}, draf: {}, urut: 'so_terakhir', arah: 'desc', halaman: 1, total: 0, ukuran: 50, no: 0,
+  opsi: null, memuatOpsi: false, qs: '', salesSemua: false, noHitung: 0, timerHitung: null
+};
 
 function bacaFilterUrl(p) {
   FILTER.forEach(k => { daftar.f[k] = (p.get(k) || '').trim(); });
@@ -185,43 +195,64 @@ function bacaFilterUrl(p) {
   daftar.halaman = Math.max(1, parseInt(p.get('halaman'), 10) || 1);
 }
 
-function qsDaftar() {
+function qsFilter(f) {
   const p = new URLSearchParams();
-  FILTER.forEach(k => { if (daftar.f[k]) p.set(k, daftar.f[k]); });
+  FILTER.forEach(k => { if (f[k]) p.set(k, f[k]); });
+  return p;
+}
+
+function qsDaftar() {
+  const p = qsFilter(daftar.f);
   if (daftar.urut !== 'so_terakhir' || daftar.arah !== 'desc') { p.set('urut', daftar.urut); p.set('arah', daftar.arah); }
   if (daftar.halaman > 1) p.set('halaman', daftar.halaman);
   return p.toString();
 }
 
+function labelPeriode(f) {
+  if (!f.tahun) return '';
+  return f.bulan ? `${NAMA_BULAN[Number(f.bulan) - 1] || f.bulan} ${f.tahun}` : f.tahun;
+}
+
+function jumlahFilter(f) {
+  return ['sales', 'bayar', 'produksi', 'kirim', 'tahun'].filter(k => f[k]).length;
+}
+
+const IKON_X = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
 function isiFilterUi() {
-  if (document.activeElement !== $('f-q')) $('f-q').value = daftar.f.q;
-  ['sales', 'bayar', 'produksi', 'kirim', 'tahun'].forEach(k => {
-    const el = $(`f-${k}`);
-    if (daftar.f[k] && ![...el.options].some(o => o.value === daftar.f[k])) el.add(new Option(daftar.f[k], daftar.f[k]));
-    el.value = daftar.f[k];
+  const f = daftar.f;
+  if (document.activeElement !== $('f-q')) $('f-q').value = f.q;
+  const n = jumlahFilter(f);
+  $('f-n').textContent = n;
+  $('f-n').hidden = !n;
+  $('btn-filter').classList.toggle('ada', n > 0);
+  const pil = [];
+  if (f.tahun) pil.push(['tahun', labelPeriode(f)]);
+  ['bayar', 'produksi', 'kirim'].forEach(k => {
+    if (f[k]) pil.push([k, k === 'bayar' ? (PILIHAN[k][f[k]] || f[k]) : `${JUDUL_PILIHAN[k]}: ${(PILIHAN[k][f[k]] || f[k]).toLowerCase()}`]);
   });
-  $('f-bulan').disabled = !daftar.f.tahun;
-  $('f-bulan').value = daftar.f.tahun ? daftar.f.bulan : '';
-  $('f-reset').hidden = !FILTER.some(k => daftar.f[k]);
+  if (f.sales) pil.push(['sales', f.sales]);
+  $('f-aktif').innerHTML = pil.map(([k, label]) =>
+    `<button type="button" class="pil-aktif" data-hapus="${k}" aria-label="Hapus filter ${esc(label)}">${esc(label)}${IKON_X}</button>`
+  ).join('') + (pil.length ? '<button type="button" class="link-hapus" data-hapus="semua">Hapus semua</button>' : '');
+  $('f-aktif').hidden = !pil.length;
 }
 
 async function muatOpsi() {
-  if (daftar.opsi) return;
-  daftar.opsi = true;
+  if (daftar.opsi || daftar.memuatOpsi) return;
+  daftar.memuatOpsi = true;
   try {
-    const o = await ambilJson('/api/projects/opsi');
-    const sales = $('f-sales');
-    o.sales.forEach(v => { if (![...sales.options].some(x => x.value === v)) sales.add(new Option(v, v)); });
-    const tahun = $('f-tahun');
-    o.tahun.forEach(v => { if (![...tahun.options].some(x => x.value === String(v))) tahun.add(new Option(v, v)); });
-    isiFilterUi();
+    daftar.opsi = await ambilJson('/api/projects/opsi');
+    if (!$('laci').hidden) renderLaci();
   } catch (e) {
-    daftar.opsi = false;
+    daftar.opsi = null;
+  } finally {
+    daftar.memuatOpsi = false;
   }
 }
 
 function terapkanFilter(ganti = true) {
-  daftar.halaman = ganti ? 1 : daftar.halaman;
+  if (ganti) daftar.halaman = 1;
   const qs = qsDaftar();
   history.replaceState({ daftar: true }, '', qs ? `/project?${qs}` : '/project');
   muatDaftar();
@@ -295,6 +326,88 @@ function renderDaftar(rows) {
   $('d-next').disabled = daftar.halaman >= nHal;
 }
 
+function chip(nilai, label, aktif) {
+  return `<button type="button" class="chip-f${aktif ? ' aktif' : ''}" data-v="${esc(nilai)}" aria-pressed="${aktif}">${esc(label)}</button>`;
+}
+
+function renderLaci() {
+  const d = daftar.draf;
+  ['bayar', 'produksi', 'kirim'].forEach(k => {
+    $(`c-${k}`).innerHTML = Object.entries(PILIHAN[k]).map(([v, l]) => chip(v, l, d[k] === v)).join('');
+  });
+  const tahun = (daftar.opsi ? daftar.opsi.tahun.map(String) : []);
+  if (d.tahun && !tahun.includes(d.tahun)) tahun.unshift(d.tahun);
+  $('c-tahun').innerHTML = tahun.length ? tahun.map(t => chip(t, t, d.tahun === t)).join('') : '<span class="muted small">Memuat…</span>';
+  $('c-bulan').hidden = !d.tahun;
+  $('c-bulan').innerHTML = NAMA_BULAN.map((b, i) => chip(String(i + 1), b, d.bulan === String(i + 1))).join('');
+  const sales = daftar.opsi ? [...daftar.opsi.sales] : [];
+  if (d.sales && !sales.includes(d.sales)) sales.unshift(d.sales);
+  let tampil = sales;
+  if (!daftar.salesSemua && sales.length > SALES_AWAL) {
+    tampil = sales.slice(0, SALES_AWAL);
+    if (d.sales && !tampil.includes(d.sales)) tampil = [d.sales, ...tampil.slice(0, SALES_AWAL - 1)];
+  }
+  $('c-sales').innerHTML = sales.length ? tampil.map(s => chip(s, s, d.sales === s)).join('') : '<span class="muted small">Memuat…</span>';
+  $('sales-lagi').hidden = sales.length <= SALES_AWAL;
+  $('sales-lagi').textContent = daftar.salesSemua ? 'Lebih sedikit' : `Lihat semua (${sales.length})`;
+  $('laci-hapus').disabled = !jumlahFilter(d);
+}
+
+function hitungDraf() {
+  clearTimeout(daftar.timerHitung);
+  const no = ++daftar.noHitung;
+  $('laci-terap').classList.add('menghitung');
+  daftar.timerHitung = setTimeout(async () => {
+    const p = qsFilter(daftar.draf);
+    p.set('hitung', '1');
+    try {
+      const data = await ambilJson(`/api/projects/daftar?${p}`);
+      if (no !== daftar.noHitung) return;
+      const n = data.total;
+      $('laci-terap').textContent = n ? `Tampilkan ${fmtAngka.format(n)} project` : 'Tidak ada project';
+      $('laci-terap').disabled = !n;
+    } catch (e) {
+      if (no !== daftar.noHitung) return;
+      $('laci-terap').textContent = 'Tampilkan project';
+      $('laci-terap').disabled = false;
+    } finally {
+      if (no === daftar.noHitung) $('laci-terap').classList.remove('menghitung');
+    }
+  }, 200);
+}
+
+function bukaLaci() {
+  daftar.draf = { ...daftar.f };
+  daftar.salesSemua = false;
+  renderLaci();
+  $('laci-terap').textContent = `Tampilkan ${fmtAngka.format(daftar.total)} project`;
+  $('laci-terap').disabled = !daftar.total;
+  const laci = $('laci');
+  laci.hidden = false;
+  laci.offsetHeight;
+  laci.classList.add('buka');
+  document.body.style.overflow = 'hidden';
+  muatOpsi();
+  $('laci-tutup').focus();
+}
+
+function tutupLaci() {
+  const laci = $('laci');
+  if (laci.hidden) return;
+  laci.classList.remove('buka');
+  document.body.style.overflow = '';
+  setTimeout(() => { if (!laci.classList.contains('buka')) laci.hidden = true; }, 220);
+  $('btn-filter').focus();
+}
+
+function ubahDraf(k, v) {
+  const d = daftar.draf;
+  d[k] = d[k] === v ? '' : v;
+  if (k === 'tahun') d.bulan = '';
+  renderLaci();
+  hitungDraf();
+}
+
 function bukaDariDaftar(kode) {
   daftar.dariDaftar = true;
   history.pushState({ kode }, '', `/project?kode=${encodeURIComponent(kode)}`);
@@ -308,19 +421,32 @@ function setupDaftar() {
     clearTimeout(timer);
     timer = setTimeout(() => { daftar.f.q = $('f-q').value.trim(); terapkanFilter(); }, 300);
   });
-  ['sales', 'bayar', 'produksi', 'kirim', 'tahun', 'bulan'].forEach(k => {
-    $(`f-${k}`).addEventListener('change', e => {
-      daftar.f[k] = e.target.value;
-      if (k === 'tahun' && !daftar.f.tahun) daftar.f.bulan = '';
-      terapkanFilter();
-    });
-  });
-  const bulan = $('f-bulan');
-  NAMA_BULAN.forEach((b, i) => bulan.add(new Option(b, i + 1)));
-  $('f-reset').addEventListener('click', () => {
-    FILTER.forEach(k => { daftar.f[k] = ''; });
+  $('btn-filter').addEventListener('click', bukaLaci);
+  $('f-aktif').addEventListener('click', e => {
+    const b = e.target.closest('[data-hapus]');
+    if (!b) return;
+    const k = b.dataset.hapus;
+    if (k === 'semua') ['sales', 'bayar', 'produksi', 'kirim', 'tahun', 'bulan'].forEach(x => { daftar.f[x] = ''; });
+    else { daftar.f[k] = ''; if (k === 'tahun') daftar.f.bulan = ''; }
     terapkanFilter();
   });
+  $('laci').addEventListener('click', e => {
+    if (e.target.closest('[data-tutup-laci]')) { tutupLaci(); return; }
+    const c = e.target.closest('.chip-f');
+    if (c) ubahDraf(c.parentElement.dataset.f, c.dataset.v);
+  });
+  $('sales-lagi').addEventListener('click', () => { daftar.salesSemua = !daftar.salesSemua; renderLaci(); });
+  $('laci-hapus').addEventListener('click', () => {
+    ['sales', 'bayar', 'produksi', 'kirim', 'tahun', 'bulan'].forEach(k => { daftar.draf[k] = ''; });
+    renderLaci();
+    hitungDraf();
+  });
+  $('laci-terap').addEventListener('click', () => {
+    ['sales', 'bayar', 'produksi', 'kirim', 'tahun', 'bulan'].forEach(k => { daftar.f[k] = daftar.draf[k] || ''; });
+    tutupLaci();
+    terapkanFilter();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('laci').hidden) tutupLaci(); });
   $('d-prev').addEventListener('click', () => { daftar.halaman--; terapkanFilter(false); window.scrollTo(0, 0); });
   $('d-next').addEventListener('click', () => { daftar.halaman++; terapkanFilter(false); window.scrollTo(0, 0); });
   $('tbl-daftar').addEventListener('click', e => {
@@ -670,6 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDaftar();
   window.addEventListener('popstate', () => {
     tutupModal();
+    tutupLaci();
     rute();
   });
   rute();
