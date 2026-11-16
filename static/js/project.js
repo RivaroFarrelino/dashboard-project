@@ -128,7 +128,7 @@ function setupCari() {
     const ketik = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
     if ((e.key === '/' && !ketik) || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) {
       e.preventDefault();
-      input.focus();
+      ($('project-view').hidden ? $('f-q') : input).focus();
     }
   });
 
@@ -138,6 +138,7 @@ function setupCari() {
     input.value = '';
     input.blur();
     history.pushState({ kode: p.kode }, '', `/project?kode=${encodeURIComponent(p.kode)}`);
+    daftar.dariDaftar = false;
     muatProject(p.kode);
   }
 }
@@ -145,8 +146,7 @@ function setupCari() {
 async function muatProject(kode) {
   state.kode = kode;
   tampilPesan('');
-  $('kosong').hidden = true;
-  $('project-view').hidden = false;
+  tampilMode('detail');
   $('tbl-so').innerHTML = '<tbody><tr><td class="loading">Memuat data project…</td></tr></tbody>';
   try {
     const data = await ambilJson(`/api/project/${encodeURIComponent(kode)}`);
@@ -155,10 +155,206 @@ async function muatProject(kode) {
     renderHeader(data.header);
     renderSo(data.so);
   } catch (e) {
+    if (state.kode !== kode) return;
     $('project-view').hidden = true;
-    $('kosong').hidden = false;
     tampilPesan(e.message);
   }
+}
+
+function tampilMode(mode) {
+  $('daftar-view').hidden = mode !== 'daftar';
+  $('project-view').hidden = mode !== 'detail';
+  $('cari-wrap').hidden = mode !== 'detail';
+  $('btn-kembali').hidden = mode !== 'detail';
+}
+
+const FILTER = ['q', 'sales', 'bayar', 'produksi', 'kirim', 'tahun', 'bulan'];
+const KOLOM_DAFTAR = [
+  ['kode', 'Kode Project'], ['nama', 'Nama Project'], ['customer', 'Customer'], ['sales', 'Sales'],
+  ['jml_so', 'SO', 'num'], ['kontrak', 'Kontrak', 'num'], ['pct_paid', 'Paid', 'num'],
+  ['pct_fg', 'FG Finish', 'num'], ['pct_ship', 'Shipment', 'num'], ['sisa_ots', 'Sisa OTS', 'num'],
+  ['so_terakhir', 'SO Terakhir', 'num']
+];
+const daftar = { f: {}, urut: 'so_terakhir', arah: 'desc', halaman: 1, total: 0, ukuran: 50, no: 0, opsi: false, qs: '' };
+
+function bacaFilterUrl(p) {
+  FILTER.forEach(k => { daftar.f[k] = (p.get(k) || '').trim(); });
+  if (!daftar.f.tahun) daftar.f.bulan = '';
+  daftar.urut = KOLOM_DAFTAR.some(k => k[0] === p.get('urut')) ? p.get('urut') : 'so_terakhir';
+  daftar.arah = p.get('arah') === 'asc' ? 'asc' : 'desc';
+  daftar.halaman = Math.max(1, parseInt(p.get('halaman'), 10) || 1);
+}
+
+function qsDaftar() {
+  const p = new URLSearchParams();
+  FILTER.forEach(k => { if (daftar.f[k]) p.set(k, daftar.f[k]); });
+  if (daftar.urut !== 'so_terakhir' || daftar.arah !== 'desc') { p.set('urut', daftar.urut); p.set('arah', daftar.arah); }
+  if (daftar.halaman > 1) p.set('halaman', daftar.halaman);
+  return p.toString();
+}
+
+function isiFilterUi() {
+  if (document.activeElement !== $('f-q')) $('f-q').value = daftar.f.q;
+  ['sales', 'bayar', 'produksi', 'kirim', 'tahun'].forEach(k => {
+    const el = $(`f-${k}`);
+    if (daftar.f[k] && ![...el.options].some(o => o.value === daftar.f[k])) el.add(new Option(daftar.f[k], daftar.f[k]));
+    el.value = daftar.f[k];
+  });
+  $('f-bulan').disabled = !daftar.f.tahun;
+  $('f-bulan').value = daftar.f.tahun ? daftar.f.bulan : '';
+  $('f-reset').hidden = !FILTER.some(k => daftar.f[k]);
+}
+
+async function muatOpsi() {
+  if (daftar.opsi) return;
+  daftar.opsi = true;
+  try {
+    const o = await ambilJson('/api/projects/opsi');
+    const sales = $('f-sales');
+    o.sales.forEach(v => { if (![...sales.options].some(x => x.value === v)) sales.add(new Option(v, v)); });
+    const tahun = $('f-tahun');
+    o.tahun.forEach(v => { if (![...tahun.options].some(x => x.value === String(v))) tahun.add(new Option(v, v)); });
+    isiFilterUi();
+  } catch (e) {
+    daftar.opsi = false;
+  }
+}
+
+function terapkanFilter(ganti = true) {
+  daftar.halaman = ganti ? 1 : daftar.halaman;
+  const qs = qsDaftar();
+  history.replaceState({ daftar: true }, '', qs ? `/project?${qs}` : '/project');
+  muatDaftar();
+}
+
+async function muatDaftar() {
+  const no = ++daftar.no;
+  state.kode = null;
+  daftar.qs = qsDaftar();
+  tampilPesan('');
+  tampilMode('daftar');
+  isiFilterUi();
+  muatOpsi();
+  const tbl = $('tbl-daftar');
+  if (!tbl.tHead) tbl.innerHTML = '<tbody><tr><td class="loading">Memuat daftar project…</td></tr></tbody>';
+  tbl.classList.add('memuat');
+  const p = new URLSearchParams(daftar.qs);
+  p.set('urut', daftar.urut);
+  p.set('arah', daftar.arah);
+  p.set('halaman', daftar.halaman);
+  try {
+    const data = await ambilJson(`/api/projects/daftar?${p}`);
+    if (no !== daftar.no) return;
+    daftar.total = data.total;
+    daftar.ukuran = data.ukuran;
+    renderDaftar(data.rows);
+  } catch (e) {
+    if (no !== daftar.no) return;
+    tbl.innerHTML = '';
+    $('d-info').textContent = '';
+    $('d-halaman').textContent = '';
+    tampilPesan(e.message);
+  } finally {
+    if (no === daftar.no) tbl.classList.remove('memuat');
+  }
+}
+
+function selPersen(v) {
+  if (!ada(v)) return STRIP;
+  const n = Math.max(0, Math.min(100, Number(v)));
+  return `<span class="pct-sel"><span class="mini-bar${n >= 100 ? ' full' : ''}"><i style="width:${n}%"></i></span>${persen(v)}</span>`;
+}
+
+function renderDaftar(rows) {
+  const head = KOLOM_DAFTAR.map(([k, label, kelas]) => {
+    const aktif = daftar.urut === k;
+    const panah = aktif ? (daftar.arah === 'asc' ? ' ↑' : ' ↓') : '';
+    return `<th class="sortir${kelas ? ` ${kelas}` : ''}${aktif ? ' aktif' : ''}" data-urut="${k}">${label}${panah}</th>`;
+  }).join('');
+  const body = rows.length ? rows.map(r => `
+    <tr class="baris-project" data-kode="${esc(r.kode)}" tabindex="0">
+      <td><b>${esc(r.kode)}</b></td>
+      <td class="wrap">${teks(r.nama)}</td>
+      <td class="wrap">${teks(r.customer)}</td>
+      <td class="wrap sales">${teks(r.sales)}</td>
+      <td class="num">${r.jml_so}</td>
+      <td class="num" title="${fmtAngka.format(r.kontrak || 0)}">${ringkas(r.kontrak)}</td>
+      <td class="num">${selPersen(r.pct_paid)}</td>
+      <td class="num">${selPersen(r.pct_fg)}</td>
+      <td class="num">${selPersen(r.pct_ship)}</td>
+      <td class="num" title="${fmtAngka.format(r.sisa_ots || 0)}">${ringkas(r.sisa_ots)}</td>
+      <td class="num">${tanggal(r.so_terakhir)}</td>
+    </tr>`).join('') : `<tr><td colspan="${KOLOM_DAFTAR.length}" class="loading">Tidak ada project yang cocok</td></tr>`;
+  $('tbl-daftar').innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
+  const awal = daftar.total ? (daftar.halaman - 1) * daftar.ukuran + 1 : 0;
+  const akhir = Math.min(daftar.total, daftar.halaman * daftar.ukuran);
+  const nHal = Math.max(1, Math.ceil(daftar.total / daftar.ukuran));
+  $('d-info').textContent = `${fmtAngka.format(daftar.total)} project`;
+  $('d-halaman').textContent = daftar.total ? `${fmtAngka.format(awal)}–${fmtAngka.format(akhir)} dari ${fmtAngka.format(daftar.total)} · Halaman ${daftar.halaman}/${nHal}` : '';
+  $('d-prev').disabled = daftar.halaman <= 1;
+  $('d-next').disabled = daftar.halaman >= nHal;
+}
+
+function bukaDariDaftar(kode) {
+  daftar.dariDaftar = true;
+  history.pushState({ kode }, '', `/project?kode=${encodeURIComponent(kode)}`);
+  window.scrollTo(0, 0);
+  muatProject(kode);
+}
+
+function setupDaftar() {
+  let timer = null;
+  $('f-q').addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { daftar.f.q = $('f-q').value.trim(); terapkanFilter(); }, 300);
+  });
+  ['sales', 'bayar', 'produksi', 'kirim', 'tahun', 'bulan'].forEach(k => {
+    $(`f-${k}`).addEventListener('change', e => {
+      daftar.f[k] = e.target.value;
+      if (k === 'tahun' && !daftar.f.tahun) daftar.f.bulan = '';
+      terapkanFilter();
+    });
+  });
+  const bulan = $('f-bulan');
+  NAMA_BULAN.forEach((b, i) => bulan.add(new Option(b, i + 1)));
+  $('f-reset').addEventListener('click', () => {
+    FILTER.forEach(k => { daftar.f[k] = ''; });
+    terapkanFilter();
+  });
+  $('d-prev').addEventListener('click', () => { daftar.halaman--; terapkanFilter(false); window.scrollTo(0, 0); });
+  $('d-next').addEventListener('click', () => { daftar.halaman++; terapkanFilter(false); window.scrollTo(0, 0); });
+  $('tbl-daftar').addEventListener('click', e => {
+    const th = e.target.closest('th[data-urut]');
+    if (th) {
+      const k = th.dataset.urut;
+      if (daftar.urut === k) daftar.arah = daftar.arah === 'asc' ? 'desc' : 'asc';
+      else { daftar.urut = k; daftar.arah = ['kode', 'nama', 'customer', 'sales'].includes(k) ? 'asc' : 'desc'; }
+      terapkanFilter();
+      return;
+    }
+    const tr = e.target.closest('tr[data-kode]');
+    if (tr) bukaDariDaftar(tr.dataset.kode);
+  });
+  $('tbl-daftar').addEventListener('keydown', e => {
+    const tr = e.target.closest('tr[data-kode]');
+    if (tr && e.key === 'Enter') bukaDariDaftar(tr.dataset.kode);
+  });
+  $('btn-kembali').addEventListener('click', () => {
+    if (history.state && history.state.kode && daftar.dariDaftar) { history.back(); return; }
+    history.pushState({ daftar: true }, '', daftar.qs ? `/project?${daftar.qs}` : '/project');
+    rute();
+  });
+}
+
+function rute() {
+  const p = new URLSearchParams(location.search);
+  const kode = p.get('kode');
+  if (kode) {
+    if (state.kode !== kode) muatProject(kode);
+    return;
+  }
+  bacaFilterUrl(p);
+  muatDaftar();
 }
 
 function renderHeader(h) {
@@ -471,11 +667,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('modal-dokumen').hidden) tutupModal(); });
 
+  setupDaftar();
   window.addEventListener('popstate', () => {
-    const kode = new URLSearchParams(location.search).get('kode');
-    if (kode) muatProject(kode);
+    tutupModal();
+    rute();
   });
-
-  const kode = new URLSearchParams(location.search).get('kode');
-  if (kode) muatProject(kode);
+  rute();
 });
