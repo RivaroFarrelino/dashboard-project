@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import re
 from datetime import date, datetime, timedelta
@@ -284,6 +285,7 @@ def api_omzet():
 
 PERIODE_HARI = {"30": 30, "90": 90, "180": 180}
 MAKS_ITEM_TAGIH = 500
+PPN = 0.11
 FPPP_BRAND = {
     "A": "ASTA", "B": "AST", "C": "RSD", "D": "AST", "E": "RSD", "F": "ABX", "G": "MAX", "H": "ASTA",
     "I": "POL", "J": "MAX", "K": "POL", "L": "MAX", "M": "RAE", "N": "RAS", "O": "MAX", "P": "CAR",
@@ -399,7 +401,11 @@ def _baris_tagih(kunci):
 
 
 def _nilai_item(line_amount):
-    return float(round(float(line_amount or 0)))
+    return float(math.floor(float(line_amount or 0) + 0.5))
+
+
+def _plus_ppn(dpp):
+    return float(math.floor(float(dpp or 0) * (1 + PPN) + 0.5))
 
 
 @app.post("/api/penagihan/hitung")
@@ -429,17 +435,17 @@ def api_penagihan_hitung():
         [BRAND] + so_list + ["Down Payment", "%-DP%"],
     )}
     sudah = {r["so_no"]: float(r["nominal"] or 0) for r in db.query(
-        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))) AS nominal "
+        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount * %s))) AS nominal "
         "FROM app_fg_tagih t JOIN bc_sales_line l ON l.document_no = t.so_no AND l.line_no = t.line_no "
         "WHERE t.is_ticked = 1 AND t.so_no IN (" + tanda + ") GROUP BY t.so_no",
-        so_list,
+        [1 + PPN] + so_list,
     )}
     hasil = []
     for so_no in so_list:
         h = header.get(so_no) or {}
         kontrak = float(h.get("kontrak") or 0)
         sisa = float(max(0, round(kontrak - dp.get(so_no, 0) - sudah.get(so_no, 0))))
-        jalan = sisa
+        jalan = math.floor(sisa / (1 + PPN))
         items = []
         for b in (x for x in baris if x["so_no"] == so_no):
             nilai = _nilai_item(b["line_amount"])
@@ -450,7 +456,7 @@ def api_penagihan_hitung():
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
                       "top": h.get("top"), "kontrak": kontrak, "dp": dp.get(so_no, 0),
                       "sudah_ditagih": sudah.get(so_no, 0), "sisa": sisa, "items": items})
-    return jsonify(so=hasil)
+    return jsonify(so=hasil, ppn=PPN)
 
 
 @app.post("/api/penagihan/tandai")
@@ -471,7 +477,7 @@ def api_penagihan_tandai():
                 return jsonify(pesan="Nominal tagih belum terkirim. Muat ulang halaman (Ctrl+Shift+R) lalu coba lagi."), 400
             if nilai < 0 or nilai > 1e13:
                 return jsonify(pesan="Nominal tagih tidak boleh minus."), 400
-            nominal[k] = nilai
+            nominal[k] = _plus_ppn(nilai)
     baris = _baris_tagih(kunci)
     ubah = [b for b in baris if bool(b["is_ticked"]) != tagih]
     oleh = g.user["username"]
