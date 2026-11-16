@@ -98,6 +98,8 @@ function updatePilih() {
   $('info-pilih').textContent = n ? `${n} item dipilih` : '';
   $('btn-tandai').disabled = !n;
   $('btn-batal').disabled = !n;
+  $('btn-tandai').hidden = state.status === 'sudah';
+  $('btn-batal').hidden = state.status === 'belum';
 }
 
 function barisDariKunci(k) {
@@ -208,7 +210,7 @@ function renderKonfirmasi(data) {
       </div>
       <div class="table-wrap">
         <table class="tbl">
-          <thead><tr><th>Item No</th><th>Nama Item</th><th class="num">Qty</th><th class="num">Nilai + PPN</th><th class="num">Nominal Tagih</th></tr></thead>
+          <thead><tr><th>Item No</th><th>Nama Item</th><th class="num">Qty</th><th class="num">Nilai</th><th class="num">Nominal Tagih</th></tr></thead>
           <tbody>${so.items.map(it => `
             <tr>
               <td>${teks(it.item_no)}</td>
