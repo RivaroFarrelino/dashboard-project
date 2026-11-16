@@ -405,6 +405,10 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 .input-nominal { width: 150px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; text-align: right; font-variant-numeric: tabular-nums; background: var(--surface); color: var(--text); }
 .input-nominal:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .input-nominal.salah { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.btn-sm.btn-hijau { background: var(--green); border-color: var(--green); color: #fff; box-shadow: 0 1px 2px rgba(31, 157, 107, .25); }
+.btn-sm.btn-hijau svg { width: 14px; height: 14px; }
+.btn-sm.btn-hijau:hover { background: #198a5d; border-color: #198a5d; color: #fff; }
+.btn-sm.btn-hijau:disabled { background: var(--green-soft); border-color: var(--green-soft); color: var(--green); opacity: .7; box-shadow: none; }
 .nopay-judul { margin: 16px 0 8px; }
 .sub-sel { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
 .aksi-sel .btn-sm { margin-left: 4px; }
