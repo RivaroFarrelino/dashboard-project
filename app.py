@@ -191,6 +191,8 @@ def api_projects_daftar():
             having.append("SUM(YEAR(" + TGL_SO + ") = %s) > 0")
             params.append(int(tahun))
     sql = SQL_DAFTAR + ("HAVING " + " AND ".join(having) + " " if having else "")
+    if a.get("hitung") == "1":
+        return jsonify(total=db.query_one("SELECT COUNT(*) AS n FROM (" + sql + ") x", params)["n"])
     urut = URUT_DAFTAR.get(a.get("urut", ""), "so_terakhir")
     arah = "ASC" if a.get("arah") == "asc" else "DESC"
     try:
