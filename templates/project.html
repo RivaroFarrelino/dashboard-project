@@ -5,7 +5,7 @@
     <h1>Project</h1>
     <p class="muted">Perjalanan project dari Sales Order sampai lunas</p>
   </div>
-  <div class="search">
+  <div class="search" id="cari-wrap" hidden>
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
     <input id="cari-project" type="search" autocomplete="off" role="combobox" aria-controls="hasil-cari" placeholder="Cari kode project, nama, customer, atau no SO">
     <kbd class="kbd">/</kbd>
@@ -13,15 +13,67 @@
   </div>
 </header>
 
-<section id="kosong" class="empty">
-  <div class="empty-icon">
-    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-  </div>
-  <h2>Pilih project</h2>
-  <p class="muted">Ketik kode project, nama project, nama customer, atau nomor SO di kotak pencarian.</p>
-</section>
+<button class="btn-sm btn-kembali" id="btn-kembali" hidden><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>Daftar project</button>
 
 <section id="pesan" class="alert" hidden></section>
+
+<section id="daftar-view" hidden>
+  <div class="filter-bar card filter-project">
+    <div class="search search-sm">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="f-q" type="search" autocomplete="off" placeholder="Cari kode, nama project, customer, no SO">
+    </div>
+    <label class="select-wrap inline"><span class="muted small">Sales</span>
+      <select id="f-sales"><option value="">Semua</option></select>
+    </label>
+    <label class="select-wrap inline"><span class="muted small">Bayar</span>
+      <select id="f-bayar">
+        <option value="">Semua</option>
+        <option value="belum">Belum bayar</option>
+        <option value="dp">Sudah DP</option>
+        <option value="lunas">Lunas</option>
+      </select>
+    </label>
+    <label class="select-wrap inline"><span class="muted small">Produksi</span>
+      <select id="f-produksi">
+        <option value="">Semua</option>
+        <option value="belum">Belum mulai</option>
+        <option value="sebagian">Sebagian</option>
+        <option value="selesai">Selesai</option>
+      </select>
+    </label>
+    <label class="select-wrap inline"><span class="muted small">Kirim</span>
+      <select id="f-kirim">
+        <option value="">Semua</option>
+        <option value="belum">Belum kirim</option>
+        <option value="sebagian">Sebagian</option>
+        <option value="selesai">Selesai</option>
+      </select>
+    </label>
+    <label class="select-wrap inline"><span class="muted small">Periode SO</span>
+      <select id="f-tahun"><option value="">Semua tahun</option></select>
+      <select id="f-bulan" disabled><option value="">Semua bulan</option></select>
+    </label>
+    <button class="btn-sm" id="f-reset" hidden>Reset</button>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3>Daftar project</h3>
+      <span class="muted small" id="d-info"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl tbl-daftar" id="tbl-daftar"></table>
+    </div>
+    <div class="pager">
+      <span class="muted small" id="d-halaman"></span>
+      <div class="toolbar">
+        <button class="btn-sm" id="d-prev">‹ Sebelumnya</button>
+        <button class="btn-sm" id="d-next">Berikutnya ›</button>
+      </div>
+    </div>
+  </div>
+</section>
 
 <section id="project-view" hidden>
   <div class="card project-info">
