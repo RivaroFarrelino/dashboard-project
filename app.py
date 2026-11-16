@@ -14,6 +14,10 @@ import db
 BRAND = "AST"
 BRAND_NAMA = "Astral"
 PESAN_GAGAL = "Data belum bisa dimuat. Coba lagi beberapa saat lagi."
+ASET_VERSI = str(int(max(
+    (os.path.getmtime(os.path.join(d, f)) for d, _, fs in os.walk(os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")) for f in fs),
+    default=0,
+)))
 
 
 def _json_default(o):
@@ -51,7 +55,7 @@ def handle_error(err):
 
 @app.context_processor
 def inject_globals():
-    return {"brand_nama": BRAND_NAMA, "user": g.get("user")}
+    return {"brand_nama": BRAND_NAMA, "user": g.get("user"), "aset_v": ASET_VERSI}
 
 
 @app.get("/")
@@ -421,9 +425,9 @@ def api_penagihan_hitung():
         "UNION ALL SELECT source_pi, -amount FROM app_nopay_alloc WHERE amount > 0 AND source_pi IS NOT NULL"
         ") x JOIN bc_proforma_header pi ON pi.no = x.pi_no "
         "WHERE pi.nomor_so IN (" + tanda + ") "
-        "AND (pi.proforma_type LIKE %s OR pi.external_document_no LIKE %s) "
+        "AND (pi.proforma_type = %s OR (pi.proforma_type IS NULL AND pi.external_document_no LIKE %s)) "
         "GROUP BY pi.nomor_so",
-        [BRAND] + so_list + ["%DP%", "%-DP%"],
+        [BRAND] + so_list + ["Down Payment", "%-DP%"],
     )}
     sudah = {r["so_no"]: float(r["nominal"] or 0) for r in db.query(
         "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount * %s))) AS nominal "
@@ -465,7 +469,7 @@ def api_penagihan_tandai():
                 nilai = round(float(it["nominal"]), 2)
                 k = (str(it["so_no"])[:20], int(it["line_no"]))
             except (KeyError, TypeError, ValueError):
-                return jsonify(pesan="Nominal tagih belum diisi untuk semua item."), 400
+                return jsonify(pesan="Nominal tagih belum terkirim. Muat ulang halaman (Ctrl+Shift+R) lalu coba lagi."), 400
             if nilai < 0 or nilai > 1e13:
                 return jsonify(pesan="Nominal tagih tidak boleh minus."), 400
             nominal[k] = nilai
