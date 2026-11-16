@@ -215,6 +215,46 @@ def api_projects_daftar():
     return jsonify(rows=rows, total=total, halaman=halaman, ukuran=UKURAN_DAFTAR)
 
 
+def _is_valas(kode):
+    return bool(kode) and str(kode).upper() not in ("IDR", "RP")
+
+
+def _kurs_so(so_list):
+    if not so_list:
+        return {}
+    tanda = ", ".join(["%s"] * len(so_list))
+    rows = db.query(
+        "SELECT nomor_so AS so_no, kurs FROM ("
+        "SELECT nomor_so, kurs, ROW_NUMBER() OVER (PARTITION BY nomor_so ORDER BY posting_date DESC, no DESC) AS rn "
+        "FROM bc_proforma_header WHERE nomor_so IN (" + tanda + ") AND kurs > 0 AND missing_in_bc_since IS NULL"
+        ") x WHERE rn = 1",
+        so_list,
+    )
+    return {r["so_no"]: float(r["kurs"]) for r in rows}
+
+
+def _ke_rupiah(r, kurs):
+    def kali(v):
+        return round(float(v or 0) * kurs, 2) if kurs else None
+
+    r["kurs"] = kurs
+    r["kontrak_valas"] = r["kontrak"]
+    r["nilai_so_valas"] = r["nilai_so"]
+    r["kontrak"] = kali(r["kontrak"])
+    r["nilai_so"] = kali(r["nilai_so"])
+    r["pi_created"] = kali(r["pi_created"])
+    kontrak = float(r["kontrak"] or 0)
+    r["pct_pi"] = round(float(r["pi_created"] or 0) / kontrak * 100, 2) if kontrak > 0 else None
+    r["pct_paid"] = round(float(r["paid"] or 0) / kontrak * 100, 2) if kontrak > 0 else None
+    r["sisa_ots"] = kontrak - float(r["invoice_created"] or 0) if kurs else None
+    for o in r["omzet"]:
+        o["nilai_valas"] = o["nilai"]
+        o["nilai"] = kali(o["nilai"])
+    for key in ("nilai_komisi", "nilai_tim"):
+        if r["komisi"].get(key) is not None:
+            r["komisi"][key] = round(float(r["komisi"][key]) * kurs) if kurs else None
+
+
 @app.get("/api/project/<kode>")
 def api_project(kode):
     so_rows = db.query(
@@ -234,12 +274,16 @@ def api_project(kode):
     }
     omzet = {}
     for r in db.query(
-        "SELECT o.so_no, o.omzet_ke, o.tanggal, o.nilai FROM v_omzet o "
+        "SELECT o.so_no, o.omzet_ke, o.tanggal, o.bulan, o.nilai FROM v_omzet o "
         "JOIN bc_sales_header h ON h.no = o.so_no WHERE h.brand = %s AND h.project_code = %s "
         "ORDER BY o.so_no, o.omzet_ke",
         (BRAND, kode),
     ):
-        omzet.setdefault(r["so_no"], []).append({"ke": r["omzet_ke"], "tanggal": r["tanggal"], "nilai": r["nilai"]})
+        omzet.setdefault(r["so_no"], []).append(
+            {"ke": r["omzet_ke"], "tanggal": r["tanggal"], "bulan": r["bulan"], "nilai": r["nilai"]})
+
+    valas = [r["so_no"] for r in so_rows if _is_valas(r.get("currency_code"))]
+    kurs = _kurs_so(valas)
 
     qty = db.query_one(
         "SELECT SUM(c.qty_fg) AS qty_fg, SUM(c.qty_fg_finish) AS qty_fg_finish, "
@@ -255,6 +299,8 @@ def api_project(kode):
             "grup", "pct_komisi", "nilai_komisi", "grup_tim", "pct_tim", "nilai_tim",
             "tanggal_keluar_komisi", "bulan_komisi")}
         r["omzet"] = omzet.get(r["so_no"], [])
+        if r["so_no"] in valas:
+            _ke_rupiah(r, kurs.get(r["so_no"]))
 
     kontrak = sum(float(r["kontrak"] or 0) for r in so_rows)
     pi_created = sum(float(r["pi_created"] or 0) for r in so_rows)
@@ -283,6 +329,7 @@ def api_project(kode):
         "pct_fg_finish": pct(qty.get("qty_fg_finish"), qty.get("qty_fg")),
         "pct_ship": pct(qty.get("qty_ship"), qty.get("qty_item")),
     }
+    header["ada_valas"] = bool(valas)
     return jsonify(header=header, so=so_rows)
 
 
@@ -342,30 +389,55 @@ def api_so_dokumen(so_no):
     return jsonify(so=so, proforma=proforma, invoice=invoice, nopay=alokasi)
 
 
+def _tanggal_arg(nilai):
+    try:
+        return date.fromisoformat(str(nilai)[:10])
+    except ValueError:
+        return None
+
+
+def _sales_arg(args):
+    return args.get("sales", "").strip()[:50]
+
+
 @app.get("/api/omzet/bulan")
 def api_omzet_bulan():
+    sales = _sales_arg(request.args)
     rows = db.query(
         "SELECT o.bulan, SUM(o.nilai) AS omzet, COUNT(*) AS jml "
         "FROM v_omzet o JOIN bc_sales_header h ON h.no = o.so_no "
-        "WHERE h.brand = %s GROUP BY o.bulan ORDER BY o.bulan",
-        (BRAND,),
+        "WHERE h.brand = %s" + (" AND h.sales_dim5 = %s" if sales else "") + " GROUP BY o.bulan ORDER BY o.bulan",
+        (BRAND, sales) if sales else (BRAND,),
     )
     return jsonify(rows)
 
 
 @app.get("/api/omzet")
 def api_omzet():
-    bulan = request.args.get("bulan", "")
-    if not re.fullmatch(r"\d{4}-\d{2}", bulan):
-        return jsonify(pesan="Pilih bulan terlebih dahulu."), 400
+    a = request.args
+    bulan = a.get("bulan", "")
+    if re.fullmatch(r"\d{4}-\d{2}", bulan):
+        dari = date(int(bulan[:4]), int(bulan[5:]), 1)
+        sampai = (dari.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    else:
+        dari, sampai = _tanggal_arg(a.get("dari", "")), _tanggal_arg(a.get("sampai", ""))
+    if not dari or not sampai:
+        return jsonify(pesan="Pilih periode terlebih dahulu."), 400
+    if dari > sampai:
+        dari, sampai = sampai, dari
+    if (sampai - dari).days > 366 * 3:
+        return jsonify(pesan="Periode maksimal 3 tahun."), 400
+    sales = _sales_arg(a)
+    filter_sales = " AND h.sales_dim5 = %s" if sales else ""
+    p_sales = [sales] if sales else []
     events = db.query(
         "SELECT o.so_no, o.omzet_ke, o.tanggal, o.bulan, o.nilai, h.sell_to_customer_name AS customer, h.project_code, "
         "h.project_name, h.contract_amount AS kontrak, h.sales_dim5 AS sales, h.arsitek_dim7 AS arsitek, "
         "h.kontraktor_dim8 AS kontraktor, h.pmsm_dim6 AS pmsm "
         "FROM v_omzet o JOIN bc_sales_header h ON h.no = o.so_no "
-        "WHERE h.brand = %s AND o.so_no IN (SELECT x.so_no FROM v_omzet x WHERE x.bulan = %s) "
+        "WHERE h.brand = %s" + filter_sales + " AND o.so_no IN (SELECT x.so_no FROM v_omzet x WHERE x.tanggal BETWEEN %s AND %s) "
         "ORDER BY o.so_no, o.omzet_ke",
-        (BRAND, bulan),
+        [BRAND] + p_sales + [dari, sampai],
     )
     per_so = {}
     for e in events:
@@ -375,20 +447,36 @@ def api_omzet():
                 "sales", "arsitek", "kontraktor", "pmsm")
         })
         so.setdefault("omzet", []).append(
-            {"ke": e["omzet_ke"], "tanggal": e["tanggal"], "bulan": e["bulan"], "nilai": e["nilai"]})
+            {"ke": e["omzet_ke"], "tanggal": e["tanggal"], "bulan": e["bulan"], "nilai": e["nilai"],
+             "masuk": dari <= e["tanggal"] <= sampai})
     rows = list(per_so.values())
     for r in rows:
-        bulan_ini = [o for o in r["omzet"] if o["bulan"] == bulan]
-        r["omzet_bulan_ini"] = sum(float(o["nilai"] or 0) for o in bulan_ini)
-        r["tanggal_bulan_ini"] = min(o["tanggal"] for o in bulan_ini)
-    rows.sort(key=lambda r: (r["tanggal_bulan_ini"], r["so_no"]))
-    sales = db.query(
-        "SELECT s.sales, s.omzet, s.jml, g.kode AS grup, g.aturan, g.batas_omzet "
-        "FROM v_omzet_sales s LEFT JOIN v_sales_grup g ON g.tahun = %s AND g.sales_dim5 = s.sales "
-        "WHERE s.brand = %s AND s.bulan = %s ORDER BY s.omzet DESC",
-        (int(bulan[:4]), BRAND, bulan),
-    )
-    return jsonify(bulan=bulan, rows=rows, sales=sales)
+        periode = [o for o in r["omzet"] if o["masuk"]]
+        r["omzet_periode"] = sum(float(o["nilai"] or 0) for o in periode)
+        r["tanggal_periode"] = min(o["tanggal"] for o in periode)
+    rows.sort(key=lambda r: (r["tanggal_periode"], r["so_no"]))
+    satu_bulan = (dari.year, dari.month) == (sampai.year, sampai.month)
+    per_sales = {}
+    for r in rows:
+        x = per_sales.setdefault(r["sales"], {"sales": r["sales"], "omzet": 0.0, "jml": 0})
+        x["omzet"] += r["omzet_periode"]
+        x["jml"] += sum(1 for o in r["omzet"] if o["masuk"])
+    grup = {}
+    if satu_bulan and per_sales:
+        nama = [k for k in per_sales if k]
+        if nama:
+            grup = {g["sales_dim5"]: g for g in db.query(
+                "SELECT sales_dim5, kode, aturan, batas_omzet FROM v_sales_grup WHERE tahun = %s AND sales_dim5 IN ("
+                + ", ".join(["%s"] * len(nama)) + ")",
+                [dari.year] + nama,
+            )}
+    daftar_sales = []
+    for x in per_sales.values():
+        g_ = grup.get(x["sales"]) or {}
+        x.update(grup=g_.get("kode"), aturan=g_.get("aturan"), batas_omzet=g_.get("batas_omzet"))
+        daftar_sales.append(x)
+    daftar_sales.sort(key=lambda x: -x["omzet"])
+    return jsonify(dari=dari, sampai=sampai, satu_bulan=satu_bulan, rows=rows, sales=daftar_sales)
 
 
 PERIODE_HARI = {"30": 30, "90": 90, "180": 180}
@@ -473,13 +561,31 @@ def api_penagihan():
         "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
         "l.line_amount AS nilai, " + FPPP_NO + " AS fppp_no, " + FPPP_KODE + " AS fppp_kode, o.prod_order_no, "
         "o.qty_output, o.tgl_output, h.external_document_no AS quo, h.project_code, h.project_name, "
-        "h.sell_to_customer_name AS customer, COALESCE(t.is_ticked, 0) AS is_ticked, t.nilai_tagih, t.updated_by, "
+        "h.sell_to_customer_name AS customer, h.payment_terms_code AS top, "
+        "COALESCE(t.is_ticked, 0) AS is_ticked, t.nilai_tagih, t.updated_by, "
         "DATE_FORMAT(t.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at "
         + FROM_PENAGIHAN + where + filter_status
         + "ORDER BY o.tgl_output DESC, l.document_no, l.line_no LIMIT %s OFFSET %s",
         params + [UKURAN_HALAMAN, (halaman - 1) * UKURAN_HALAMAN],
     )
+    proforma = _proforma_so(list(dict.fromkeys(r["so_no"] for r in rows)))
+    for r in rows:
+        r["proforma"] = proforma.get(r["so_no"], [])
     return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN, rows=rows)
+
+
+def _proforma_so(so_list):
+    if not so_list:
+        return {}
+    tanda = ", ".join(["%s"] * len(so_list))
+    hasil = {}
+    for r in db.query(
+        "SELECT nomor_so AS so_no, no, proforma_type AS tipe FROM bc_proforma_header "
+        "WHERE nomor_so IN (" + tanda + ") AND missing_in_bc_since IS NULL ORDER BY nomor_so, posting_date, no",
+        so_list,
+    ):
+        hasil.setdefault(r["so_no"], []).append({"no": r["no"], "tipe": r["tipe"]})
+    return hasil
 
 
 def _kunci_item(items):
@@ -528,9 +634,12 @@ def api_penagihan_hitung():
     tanda = ", ".join(["%s"] * len(so_list))
     header = {r["so_no"]: r for r in db.query(
         "SELECT no AS so_no, sell_to_customer_name AS customer, project_code, payment_terms_code AS top, "
-        "contract_amount AS kontrak FROM bc_sales_header WHERE no IN (" + tanda + ")",
+        "contract_amount AS kontrak, currency_code FROM bc_sales_header WHERE no IN (" + tanda + ")",
         so_list,
     )}
+    kurs = _kurs_so([k for k, v in header.items() if _is_valas(v.get("currency_code"))])
+    for k, v in kurs.items():
+        header[k]["kontrak"] = float(header[k]["kontrak"] or 0) * v
     dp = {r["so_no"]: float(r["dp"] or 0) for r in db.query(
         "SELECT pi.nomor_so AS so_no, SUM(x.amount) AS dp FROM ("
         "SELECT document_no AS pi_no, amount FROM bc_cashier_in_line WHERE brand = %s "
@@ -548,6 +657,7 @@ def api_penagihan_hitung():
         "WHERE t.is_ticked = 1 AND t.so_no IN (" + tanda + ") GROUP BY t.so_no",
         [1 + PPN] + so_list,
     )}
+    proforma = _proforma_so(so_list)
     hasil = []
     for so_no in so_list:
         h = header.get(so_no) or {}
@@ -559,7 +669,7 @@ def api_penagihan_hitung():
         subtotal = sum(it["nilai"] for it in items)
         dengan_ppn = _plus_ppn(subtotal)
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
-                      "top": h.get("top"), "kontrak": kontrak, "dp": dp.get(so_no, 0),
+                      "top": h.get("top"), "proforma": proforma.get(so_no, []), "kontrak": kontrak, "dp": dp.get(so_no, 0),
                       "sudah_ditagih": sudah.get(so_no, 0), "sisa": sisa, "items": items,
                       "subtotal": subtotal, "ppn": dengan_ppn - subtotal, "total": min(dengan_ppn, sisa)})
     return jsonify(so=hasil, ppn=PPN)
