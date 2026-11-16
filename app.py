@@ -283,7 +283,6 @@ def api_omzet():
 
 
 PERIODE_HARI = {"30": 30, "90": 90, "180": 180}
-PPN = 1.11
 MAKS_ITEM_TAGIH = 500
 FPPP_BRAND = {
     "A": "ASTA", "B": "AST", "C": "RSD", "D": "AST", "E": "RSD", "F": "ABX", "G": "MAX", "H": "ASTA",
@@ -399,8 +398,8 @@ def _baris_tagih(kunci):
     return sorted(rows, key=lambda r: urut.get((r["so_no"], r["line_no"]), 0))
 
 
-def _nilai_ppn(line_amount):
-    return float(round(float(line_amount or 0) * PPN))
+def _nilai_item(line_amount):
+    return float(round(float(line_amount or 0)))
 
 
 @app.post("/api/penagihan/hitung")
@@ -430,10 +429,10 @@ def api_penagihan_hitung():
         [BRAND] + so_list + ["Down Payment", "%-DP%"],
     )}
     sudah = {r["so_no"]: float(r["nominal"] or 0) for r in db.query(
-        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount * %s))) AS nominal "
+        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))) AS nominal "
         "FROM app_fg_tagih t JOIN bc_sales_line l ON l.document_no = t.so_no AND l.line_no = t.line_no "
         "WHERE t.is_ticked = 1 AND t.so_no IN (" + tanda + ") GROUP BY t.so_no",
-        [PPN] + so_list,
+        so_list,
     )}
     hasil = []
     for so_no in so_list:
@@ -443,7 +442,7 @@ def api_penagihan_hitung():
         jalan = sisa
         items = []
         for b in (x for x in baris if x["so_no"] == so_no):
-            nilai = _nilai_ppn(b["line_amount"])
+            nilai = _nilai_item(b["line_amount"])
             nominal = min(nilai, jalan)
             jalan = jalan - nominal
             items.append({"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"],
