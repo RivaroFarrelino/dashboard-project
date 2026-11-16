@@ -384,6 +384,27 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 .kotak-password { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
 .kotak-password code { font-size: 20px; font-weight: 600; letter-spacing: .04em; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; user-select: all; }
 .aksi-sel { text-align: right; }
+.tbl .beku { position: sticky; z-index: 1; background: var(--surface); }
+.tbl thead th.beku { z-index: 3; background: var(--surface-2); }
+.tbl tfoot td.beku { background: var(--surface-2); }
+.tbl .beku-teks { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.tbl .beku-akhir { box-shadow: inset -1px 0 0 var(--border), 6px 0 8px -6px rgba(20, 24, 40, .18); }
+.modal-box.modal-tagih { width: min(1000px, 100%); }
+.modal-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 22px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.modal-foot .modal-aksi { margin-top: 0; }
+.tagih-total { display: flex; flex-direction: column; }
+.tagih-total { gap: 4px; }
+.input-nominal.input-sub { font-weight: 600; }
+.input-nominal.input-total { width: 200px; height: 40px; font-size: 18px; font-weight: 700; text-align: left; }
+.tagih-so { margin-bottom: 18px; }
+.tagih-so-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.tagih-ringkas { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); }
+.tagih-ringkas b { color: var(--text); font-variant-numeric: tabular-nums; }
+.tagih-info { margin-top: 8px; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 500; }
+.tagih-warn { margin-top: 8px; background: var(--amber-soft); color: var(--amber); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 500; }
+.input-nominal { width: 150px; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; text-align: right; font-variant-numeric: tabular-nums; background: var(--surface); color: var(--text); }
+.input-nominal:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.input-nominal.salah { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
 .nopay-judul { margin: 16px 0 8px; }
 .sub-sel { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
 .aksi-sel .btn-sm { margin-left: 4px; }
@@ -402,4 +423,7 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
   .user-teks { display: none; }
   .info-list { grid-template-columns: 1fr; gap: 2px; }
   .info-list dd { margin-bottom: 10px; }
+}
+@media (max-width: 860px) {
+  .tbl .beku { position: static; box-shadow: none; }
 }
