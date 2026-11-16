@@ -115,7 +115,7 @@ async function simpan(rows, tagih, nominal = {}) {
   rows.forEach(r => {
     if (Boolean(r.is_ticked) === tagih) return;
     const arah = tagih ? 1 : -1;
-    const nilaiTagih = tagih ? Number(nominal[kunci(r)] || 0) : Number(r.nilai_tagih || 0);
+    const nilaiTagih = tagih ? Number((hasil.nominal || {})[kunci(r)] || 0) : Number(r.nilai_tagih || 0);
     r.is_ticked = tagih ? 1 : 0;
     r.nilai_tagih = tagih ? nilaiTagih : null;
     r.updated_by = tagih ? hasil.oleh : null;
@@ -135,7 +135,9 @@ const bacaAngka = v => {
   return Number.isFinite(n) ? n : NaN;
 };
 
-const konfirmasi = { rows: [], data: null, selesai: null };
+const konfirmasi = { rows: [], data: null, selesai: null, ppn: 0.11 };
+
+const plusPpn = dpp => Math.floor(dpp * (1 + konfirmasi.ppn) + 0.5);
 
 function tutupKonfirmasi(tersimpan) {
   $('m-tagih').hidden = true;
@@ -160,14 +162,19 @@ function hitungTotalKonfirmasi() {
       inp.classList.toggle('salah', salah);
       if (salah) valid = false; else sub += n;
     });
-    total += sub;
+    const totSo = plusPpn(sub);
+    total += totSo;
     const sisa = Number(blok.dataset.sisa);
     const subInp = blok.querySelector('input[data-sub]');
+    const totInp = blok.querySelector('input[data-tot]');
     isiJikaTidakFokus(subInp, sub);
+    isiJikaTidakFokus(totInp, totSo);
     subInp.classList.remove('salah');
+    totInp.classList.remove('salah');
+    blok.querySelector('[data-ppn]').innerHTML = angka(totSo - sub);
     const warn = blok.querySelector('[data-warn]');
-    warn.hidden = sub <= sisa + 1;
-    warn.textContent = `Total SO ini melebihi sisa tagihan ${fmtAngka.format(sisa)}.`;
+    warn.hidden = totSo <= sisa + 1;
+    warn.textContent = `Melebihi sisa tagihan ${fmtAngka.format(sisa)}.`;
   });
   const totalInp = $('m-tagih-total');
   isiJikaTidakFokus(totalInp, total);
@@ -185,14 +192,14 @@ function bagiNominal(inputs, jumlah) {
   });
 }
 
-function ubahGabungan(inp, inputs) {
+function ubahGabungan(inp, inputs, termasukPpn) {
   const n = bacaAngka(inp.value);
   if (!Number.isFinite(n) || n < 0) {
     inp.classList.add('salah');
     $('m-tagih-simpan').disabled = true;
     return;
   }
-  bagiNominal(inputs, n);
+  bagiNominal(inputs, termasukPpn ? n / (1 + konfirmasi.ppn) : n);
   hitungTotalKonfirmasi();
 }
 
@@ -220,10 +227,13 @@ function renderKonfirmasi(data) {
               <td class="num"><input class="input-nominal" data-k="${esc(`${it.so_no}|${it.line_no}`)}" data-nilai="${Number(it.nilai)}" inputmode="numeric" value="${fmtAngka.format(it.nominal)}" aria-label="Nominal tagih ${esc(it.item_no)}"></td>
             </tr>`).join('')}
           </tbody>
-          <tfoot><tr><td colspan="4"><b>Subtotal</b> <span class="muted small">· bisa diubah, dibagi ke item dari atas</span></td><td class="num"><input class="input-nominal input-sub" data-sub inputmode="numeric" aria-label="Subtotal ${esc(so.so_no)}"></td></tr></tfoot>
+          <tfoot>
+            <tr><td colspan="4"><b>Subtotal</b></td><td class="num"><input class="input-nominal input-sub" data-sub inputmode="numeric" aria-label="Subtotal ${esc(so.so_no)}"></td></tr>
+            <tr><td colspan="4">PPN ${fmtPersen.format(konfirmasi.ppn * 100)}%</td><td class="num" data-ppn></td></tr>
+            <tr><td colspan="4"><b>Total</b></td><td class="num"><input class="input-nominal input-sub" data-tot inputmode="numeric" aria-label="Total ${esc(so.so_no)}"></td></tr>
+          </tfoot>
         </table>
       </div>
-      ${Number(so.sisa) <= 0 ? '<div class="tagih-info">Sisa tagihan SO ini sudah 0, jadi nominal otomatis 0. Ubah manual kalau memang masih ada yang perlu ditagih.</div>' : ''}
       <div class="tagih-warn" data-warn hidden></div>
     </div>`).join('');
   hitungTotalKonfirmasi();
@@ -240,6 +250,7 @@ async function bukaKonfirmasi(rows) {
   try {
     const data = await kirimJson('/api/penagihan/hitung', { items: rows.map(r => ({ so_no: r.so_no, line_no: r.line_no })) });
     konfirmasi.data = data;
+    konfirmasi.ppn = Number(data.ppn ?? 0.11);
     renderKonfirmasi(data);
   } catch (e) {
     $('m-tagih-isi').innerHTML = `<div class="alert">${esc(e.message)}</div>`;
@@ -304,12 +315,13 @@ document.addEventListener('DOMContentLoaded', () => {
   $('m-tagih-simpan').addEventListener('click', simpanKonfirmasi);
   $('m-tagih-isi').addEventListener('input', e => {
     if (e.target.matches('input[data-k]')) hitungTotalKonfirmasi();
-    if (e.target.matches('input[data-sub]')) ubahGabungan(e.target, [...e.target.closest('[data-so]').querySelectorAll('input[data-k]')]);
+    if (e.target.matches('input[data-sub]')) ubahGabungan(e.target, [...e.target.closest('[data-so]').querySelectorAll('input[data-k]')], false);
+    if (e.target.matches('input[data-tot]')) ubahGabungan(e.target, [...e.target.closest('[data-so]').querySelectorAll('input[data-k]')], true);
   });
-  $('m-tagih-total').addEventListener('input', e => ubahGabungan(e.target, [...document.querySelectorAll('#m-tagih-isi input[data-k]')]));
+  $('m-tagih-total').addEventListener('input', e => ubahGabungan(e.target, [...document.querySelectorAll('#m-tagih-isi input[data-k]')], true));
   $('m-tagih-total').addEventListener('focusout', () => hitungTotalKonfirmasi());
   $('m-tagih-isi').addEventListener('focusout', e => {
-    if (e.target.matches('input[data-sub]')) { hitungTotalKonfirmasi(); return; }
+    if (e.target.matches('input[data-sub], input[data-tot]')) { hitungTotalKonfirmasi(); return; }
     if (!e.target.matches('input[data-k]')) return;
     const n = bacaAngka(e.target.value);
     if (Number.isFinite(n) && e.target.value.trim() !== '') e.target.value = fmtAngka.format(Math.round(n));
