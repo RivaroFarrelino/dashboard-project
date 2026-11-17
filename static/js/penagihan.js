@@ -76,8 +76,7 @@ function renderTabel() {
   }
   const body = rows.map(r => `
     <tr class="${r.is_ticked ? 'ditagih' : ''}" data-k="${esc(kunci(r))}">
-      <td class="cek"><input type="checkbox" data-pilih aria-label="Pilih" ${state.pilih.has(kunci(r)) ? 'checked' : ''}></td>
-      <td><label class="switch"><input type="checkbox" data-tagih ${r.is_ticked ? 'checked' : ''}><span></span></label></td>
+      <td class="cek"><label class="cek-area"><input type="checkbox" data-pilih aria-label="Pilih" ${state.pilih.has(kunci(r)) ? 'checked' : ''}></label></td>
       <td>${tanggal(r.tgl_output)}</td>
       <td>${teks(r.prod_order_no)}</td>
       <td title="${esc(r.fppp_kode || '')}">${teks(r.fppp_no)}</td>
@@ -96,8 +95,8 @@ function renderTabel() {
     </tr>`).join('');
   $('tbl-fg').innerHTML = `
     <thead><tr>
-      <th class="cek"><input type="checkbox" id="pilih-semua" aria-label="Pilih semua"></th>
-      <th>Ditagih</th><th>Tanggal Output</th><th>Prod Order No</th><th>FPPP No</th><th>SO No</th><th>Customer</th><th>TOP</th><th>Proforma</th><th>QUO / CO</th>
+      <th class="cek"><label class="cek-area"><input type="checkbox" id="pilih-semua" aria-label="Pilih semua"></label></th>
+      <th>Tanggal Output</th><th>Prod Order No</th><th>FPPP No</th><th>SO No</th><th>Customer</th><th>TOP</th><th>Proforma</th><th>QUO / CO</th>
       <th>Kode Project</th><th>Item No</th><th>Nama Item</th><th class="num">Qty</th><th class="num">Nilai</th><th class="num">Nominal Tagih</th><th>Ditandai oleh</th>
     </tr></thead>
     <tbody>${body}</tbody>`;
