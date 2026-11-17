@@ -325,11 +325,11 @@ function renderDaftar(rows) {
       <td class="wrap">${teks(r.customer)}</td>
       <td class="wrap sales">${teks(r.sales)}</td>
       <td class="num">${r.jml_so}</td>
-      <td class="num" title="${fmtAngka.format(r.kontrak || 0)}">${ringkas(r.kontrak)}</td>
+      <td class="num">${angka(r.kontrak)}</td>
       <td class="num">${selPersen(r.pct_paid)}</td>
       <td class="num">${selPersen(r.pct_fg)}</td>
       <td class="num">${selPersen(r.pct_ship)}</td>
-      <td class="num" title="${fmtAngka.format(r.sisa_ots || 0)}">${ringkas(r.sisa_ots)}</td>
+      <td class="num">${angka(r.sisa_ots)}</td>
       <td class="num">${tanggal(r.so_terakhir)}</td>
     </tr>`).join('') : `<tr><td colspan="${KOLOM_DAFTAR.length}" class="loading">Tidak ada project yang cocok</td></tr>`;
   $('tbl-daftar').innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
@@ -499,20 +499,22 @@ function rute() {
   muatDaftar();
 }
 
+const rupiah = v => ada(v) ? `Rp ${angka(v)}` : STRIP;
+
 function renderHeader(h) {
   $('p-kode').textContent = h.kode;
   $('p-nama').textContent = h.nama || STRIP;
   $('p-customer').textContent = h.customer || STRIP;
   $('p-alamat').textContent = h.alamat || STRIP;
   $('p-jml-so').textContent = `${h.jml_so} SO · ${h.jml_closed} closed`;
-  $('k-kontrak').innerHTML = ringkas(h.kontrak);
+  $('k-kontrak').innerHTML = rupiah(h.kontrak);
   $('k-kontrak').title = fmtAngka.format(h.kontrak);
-  $('k-pi').innerHTML = ringkas(h.pi_created);
+  $('k-pi').innerHTML = rupiah(h.pi_created);
   $('k-pi-pct').textContent = `${persen(h.pct_pi)} dari kontrak`;
-  $('k-paid').innerHTML = ringkas(h.paid);
+  $('k-paid').innerHTML = rupiah(h.paid);
   $('k-paid-pct').textContent = `${persen(h.pct_paid)} dari kontrak`;
-  $('k-inv').innerHTML = ringkas(h.invoice_created);
-  $('k-ots').innerHTML = `Sisa OTS ${ringkas(h.sisa_ots)}`;
+  $('k-inv').innerHTML = rupiah(h.invoice_created);
+  $('k-ots').innerHTML = `Sisa OTS ${rupiah(h.sisa_ots)}`;
   setBar('k-fg', h.pct_fg_finish);
   setBar('k-ship', h.pct_ship);
 }
