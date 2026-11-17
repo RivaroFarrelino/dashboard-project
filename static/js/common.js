@@ -24,7 +24,9 @@ const persen = v => ada(v) ? `${fmtPersen.format(Number(v))}%` : STRIP;
 
 const persenKomisi = v => ada(v) ? `${fmtPersen.format(Number(v) * 100)}%` : STRIP;
 
-const ringkas = v => {
+const ringkas = v => (ada(v) ? `Rp ${fmtAngka.format(Number(v))}` : STRIP);
+
+const ringkasSumbu = v => {
   if (!ada(v)) return STRIP;
   const n = Number(v);
   const a = Math.abs(n);
