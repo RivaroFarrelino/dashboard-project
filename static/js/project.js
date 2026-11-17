@@ -631,6 +631,9 @@ async function toggleLines(tr) {
     const rows = await ambilJson(`/api/so/${encodeURIComponent(so)}/lines`);
     box.innerHTML = renderLines(so, rows);
     bekukan(box.querySelector('.tbl-lines'));
+    const wrap = $('tbl-so').parentElement;
+    const tinggiHead = $('tbl-so').tHead ? $('tbl-so').tHead.getBoundingClientRect().height : 0;
+    if (wrap.scrollHeight > wrap.clientHeight) wrap.scrollTop = Math.max(0, tr.offsetTop - tinggiHead);
   } catch (e) {
     box.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
   }
