@@ -319,8 +319,8 @@ function renderTabel() {
       <td class="beku"><b>${esc(r.so_no)}</b></td>
       <td class="beku beku-teks" title="${esc(r.customer || '')}">${teks(r.customer)}</td>
       <td class="beku">${r.project_code ? `<a href="/project?kode=${encodeURIComponent(r.project_code)}">${esc(r.project_code)}</a>` : STRIP}</td>
-      <td class="beku beku-teks" title="${esc(r.project_name || '')}">${teks(r.project_name)}</td>
-      <td class="beku beku-akhir num">${angka(r.kontrak)}</td>
+      <td class="beku beku-akhir beku-teks" title="${esc(r.project_name || '')}">${teks(r.project_name)}</td>
+      <td class="num">${angka(r.kontrak)}</td>
       ${Array.from({ length: n }, (_, i) => selOmzet(r.omzet[i])).join('')}
       <td class="num sep"><b>${angka(r.omzet_periode)}</b></td>
       <td>${teks(r.sales)}</td>
@@ -330,11 +330,11 @@ function renderTabel() {
     </tr>`).join('');
   $('tbl-omzet').innerHTML = `
     <thead><tr>
-      <th class="beku">No SO</th><th class="beku">Customer</th><th class="beku">Kode Project</th><th class="beku">Nama Project</th><th class="beku beku-akhir num">Kontrak</th>
+      <th class="beku">No SO</th><th class="beku">Customer</th><th class="beku">Kode Project</th><th class="beku beku-akhir">Nama Project</th><th class="num">Kontrak</th>
       ${headOmzet}<th class="num sep">Omzet ${esc(labelPeriode())}</th><th>Sales</th><th>Arsitek</th><th>Kontraktor</th><th>PMSM</th>
     </tr></thead>
     <tbody>${body}</tbody>
-    <tfoot><tr><td class="beku beku-akhir" colspan="5"><b>Total</b></td><td colspan="${n}"></td><td class="num sep"><b>${angka(total)}</b></td><td colspan="4"></td></tr></tfoot>`;
+    <tfoot><tr><td class="beku beku-akhir" colspan="4"><b>Total</b></td><td></td><td colspan="${n}"></td><td class="num sep"><b>${angka(total)}</b></td><td colspan="4"></td></tr></tfoot>`;
   bekukanKolom();
 }
 
