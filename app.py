@@ -455,6 +455,21 @@ def api_omzet():
         r["omzet_periode"] = sum(float(o["nilai"] or 0) for o in periode)
         r["tanggal_periode"] = min(o["tanggal"] for o in periode)
     rows.sort(key=lambda r: (r["tanggal_periode"], r["so_no"]))
+    if rows:
+        so_list = [r["so_no"] for r in rows]
+        info = {}
+        for i in range(0, len(so_list), 500):
+            bagian = so_list[i:i + 500]
+            for x in db.query(
+                "SELECT so_no, top, paid, sisa_ots FROM v_project_so WHERE so_no IN ("
+                + ", ".join(["%s"] * len(bagian)) + ")",
+                bagian,
+            ):
+                info[x["so_no"]] = x
+        for r in rows:
+            x = info.get(r["so_no"]) or {}
+            r["top"], r["cash_in"], r["ots"] = x.get("top"), x.get("paid"), x.get("sisa_ots")
+            r["status"] = "BARU" if any(o["masuk"] and int(o["ke"]) == 1 for o in r["omzet"]) else "PERUBAHAN"
     satu_bulan = (dari.year, dari.month) == (sampai.year, sampai.month)
     per_sales = {}
     for r in rows:
