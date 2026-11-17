@@ -586,3 +586,12 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
   .pil-select { width: 100%; }
   .pil-select select { max-width: none; flex: 1; }
 }
+
+.wrap-beku { max-height: calc(100vh - 150px); overflow: auto; }
+.tbl thead th { z-index: 2; }
+.tbl thead th.beku { z-index: 4; }
+.tbl-so thead tr:not(.grp) th { top: var(--tinggi-grp, 0px); }
+.tbl-so thead .sticky { z-index: 4; }
+.tbl tfoot td { position: sticky; bottom: 0; z-index: 2; }
+.tbl tfoot td.beku { z-index: 4; }
+@media (max-width: 860px) { .wrap-beku { max-height: none; } }
