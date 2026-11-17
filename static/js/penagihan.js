@@ -54,11 +54,9 @@ function renderRingkas() {
   $('k-belum-sub').innerHTML = `Nilai ${ringkas(nilai - nt)}`;
 }
 
-const TIPE_PI = { 'Down Payment': 'DP', Phase: 'Phase', Final: 'Final' };
-
 function daftarPi(list) {
   if (!list || !list.length) return STRIP;
-  return `<div class="pi-list">${list.map(p => `<span>${esc(p.no)}${p.tipe ? `<i>${esc(TIPE_PI[p.tipe] || p.tipe)}</i>` : ''}</span>`).join('')}</div>`;
+  return `<div class="pi-list">${list.map(p => `<span>${esc(p.no)}</span>`).join('')}</div>`;
 }
 
 function renderTabel() {
