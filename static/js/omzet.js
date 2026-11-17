@@ -305,13 +305,17 @@ function selOmzet(o) {
     <div>${angka(o.nilai)}</div><div class="small">${Number(o.ke) === 1 ? tanggal(o.tanggal) : bulan(o.bulan)}</div></td>`;
 }
 
+const nilaiDiakui = r => r.omzet.filter(o => o.masuk && Number(o.ke) === 1).reduce((a, o) => a + Number(o.nilai), 0);
+
+const barisBaru = q => state.rows.filter(r => r.status !== 'PERUBAHAN' && barisCocok(r, q));
+
 function renderTabel() {
   const q = $('cari-omzet').value.trim().toLowerCase();
-  const rows = state.rows.filter(r => barisCocok(r, q));
-  const total = rows.reduce((a, r) => a + Number(r.omzet_periode), 0);
-  $('judul-tabel').textContent = `Daftar omzet ${labelPeriode()} · ${rows.length} SO`;
+  const rows = barisBaru(q);
+  const total = rows.reduce((a, r) => a + nilaiDiakui(r), 0);
+  $('judul-tabel').textContent = `Omzet baru ${labelPeriode()} · ${rows.length} SO`;
   if (!rows.length) {
-    $('tbl-omzet').innerHTML = `<tbody><tr><td class="loading">${state.rows.length ? 'Tidak ada yang cocok dengan pencarian.' : 'Tidak ada omzet di periode ini.'}</td></tr></tbody>`;
+    $('tbl-omzet').innerHTML = `<tbody><tr><td class="loading">${state.rows.some(r => r.status !== 'PERUBAHAN') ? 'Tidak ada yang cocok dengan pencarian.' : 'Tidak ada omzet baru di periode ini.'}</td></tr></tbody>`;
     return;
   }
   const n = jumlahKolomOmzet(rows);
@@ -330,7 +334,7 @@ function renderTabel() {
       <td class="num">${ubah ? '' : angka(r.cash_in)}</td>
       <td class="num">${ubah ? '' : angka(r.ots)}</td>
       ${Array.from({ length: n }, (_, i) => selOmzet(r.omzet[i])).join('')}
-      <td class="num sep"><b>${angka(r.omzet_periode)}</b></td>
+      <td class="num sep"><b>${angka(nilaiDiakui(r))}</b></td>
       <td>${teks(r.sales)}</td>
       <td>${teks(r.arsitek)}</td>
       <td>${teks(r.kontraktor)}</td>
@@ -341,7 +345,7 @@ function renderTabel() {
     <thead><tr>
       <th class="beku">No SO</th><th class="beku">Customer</th><th class="beku">Kode Project</th><th class="beku beku-akhir">Nama Project</th><th>Status</th><th class="num">Kontrak</th>
       <th>TOP</th><th class="num">Cash In</th><th class="num">OTS</th>
-      ${headOmzet}<th class="num sep">Omzet ${esc(labelPeriode())}</th><th>Sales</th><th>Arsitek</th><th>Kontraktor</th><th>PMSM</th>
+      ${headOmzet}<th class="num sep">Omzet Diakui ${esc(labelPeriode())}</th><th>Sales</th><th>Arsitek</th><th>Kontraktor</th><th>PMSM</th>
     </tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr><td class="beku beku-akhir" colspan="4"><b>Total</b></td><td colspan="5"></td><td colspan="${n}"></td><td class="num sep"><b>${angka(total)}</b></td><td colspan="4"></td></tr></tfoot>`;
@@ -406,7 +410,7 @@ function bekukanKolom(tbl) {
 
 function unduhCsv() {
   const q = $('cari-omzet').value.trim().toLowerCase();
-  const rows = state.rows.filter(r => barisCocok(r, q));
+  const rows = barisBaru(q);
   const n = jumlahKolomOmzet(rows);
   const kolom = [
     ['No SO', r => r.so_no], ['Customer', r => r.customer], ['Kode Project', r => r.project_code],
@@ -418,7 +422,7 @@ function unduhCsv() {
     kolom.push([labelOmzet(i), r => r.omzet[i] ? r.omzet[i].nilai : '']);
     kolom.push([`Bulan ${labelOmzet(i)}`, r => r.omzet[i] ? r.omzet[i].bulan : '']);
   }
-  kolom.push([`Omzet ${state.dari} sd ${state.sampai}`, r => r.omzet_periode], ['Sales', r => r.sales], ['Arsitek', r => r.arsitek],
+  kolom.push([`Omzet ${state.dari} sd ${state.sampai}`, r => nilaiDiakui(r)], ['Sales', r => r.sales], ['Arsitek', r => r.arsitek],
     ['Kontraktor', r => r.kontraktor], ['PMSM', r => r.pmsm]);
   const sel = v => {
     let s = String(v ?? '');
