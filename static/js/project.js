@@ -607,6 +607,8 @@ function renderSo(rows, h = {}) {
       </tr>`;
   }).join('');
   $('tbl-so').innerHTML = head + `<tbody>${body}</tbody>`;
+  const r1 = $('tbl-so').querySelector('thead tr.grp');
+  if (r1) $('tbl-so').style.setProperty('--tinggi-grp', `${r1.getBoundingClientRect().height}px`);
 }
 
 async function toggleLines(tr) {
