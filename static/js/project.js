@@ -546,7 +546,7 @@ function renderSo(rows, h = {}) {
   const valas = h.ada_valas ? (rows.find(r => r.kontrak_valas !== undefined) || {}).currency_code || 'USD' : null;
   const nValas = valas ? 3 : 0;
   const nOmzet = Math.max(1, ...rows.map(r => r.omzet.length));
-  const omzetHead = Array.from({ length: nOmzet }, (_, i) => `<th class="num">Omzet ${i + 1}</th>`).join('');
+  const omzetHead = Array.from({ length: nOmzet }, (_, i) => `<th class="num">${labelOmzet(i)}</th>`).join('');
   const head = `
     <thead>
       <tr class="grp">
