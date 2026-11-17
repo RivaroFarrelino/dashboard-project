@@ -39,6 +39,8 @@ const tanggal = v => {
   return Number.isNaN(d.getTime()) ? esc(v) : fmtTanggal.format(d);
 };
 
+const labelOmzet = i => (i === 0 ? 'Omzet Diakui' : `Omzet ${i}`);
+
 const bulan = v => {
   if (!ada(v)) return STRIP;
   const [y, m] = String(v).split('-');
