@@ -630,3 +630,9 @@ body.ada-aksi .pager { margin-bottom: 72px; }
   .aksi-btn { padding: 0 14px; margin-left: auto; }
 }
 #project-view .kpi-value { font-size: clamp(15px, 1.25vw, 18px); white-space: nowrap; }
+
+.status-omzet { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.status-omzet.baru { background: var(--green-soft); color: var(--green); }
+.status-omzet.ubah { background: var(--amber-soft); color: var(--amber); }
+.link-bulan { font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--accent-soft); }
+.link-bulan:hover { text-decoration-color: currentColor; }
