@@ -556,7 +556,7 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 .pi-list i { font-style: normal; color: var(--muted); margin-left: 6px; font-size: 11px; }
 .tagih-meta .pi-list { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
 
-.lines-wrap { max-height: min(62vh, 560px); overflow: auto; }
+.lines-wrap { max-height: max(240px, calc(100vh - 340px)); overflow: auto; }
 .tbl-lines .beku-teks { max-width: 260px; }
 .omzet-so .small { margin-top: 2px; font-size: 11px; }
 
@@ -590,8 +590,13 @@ body.halaman-login { background: var(--surface); min-height: 100vh; display: fle
 .wrap-beku { max-height: calc(100vh - 150px); overflow: auto; }
 .tbl thead th { z-index: 2; }
 .tbl thead th.beku { z-index: 4; }
-.tbl-so thead tr:not(.grp) th { top: var(--tinggi-grp, 0px); }
-.tbl-so thead .sticky { z-index: 4; }
+.tbl-so > thead > tr:not(.grp) > th { top: var(--tinggi-grp, 0px); }
+.tbl-so > thead .sticky { z-index: 4; }
 .tbl tfoot td { position: sticky; bottom: 0; z-index: 2; }
 .tbl tfoot td.beku { z-index: 4; }
 @media (max-width: 860px) { .wrap-beku { max-height: none; } }
+
+.tbl th.cek, .tbl td.cek { width: 52px; padding: 0; }
+.cek-area { display: flex; align-items: center; justify-content: center; width: 52px; min-height: 44px; cursor: pointer; }
+.cek-area input { width: 20px; height: 20px; margin: 0; cursor: pointer; accent-color: var(--accent); }
+.tbl tbody tr:hover .cek-area input:not(:checked) { outline: 2px solid var(--accent-soft); outline-offset: 1px; border-radius: 4px; }
