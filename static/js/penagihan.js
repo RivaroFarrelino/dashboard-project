@@ -104,9 +104,11 @@ function renderTabel() {
 
 function updatePilih() {
   const n = state.pilih.size;
-  $('info-pilih').textContent = n ? `${n} item dipilih` : '';
-  $('btn-tandai').disabled = !n;
-  $('btn-batal').disabled = !n;
+  const nilai = [...state.pilih].map(barisDariKunci).filter(Boolean).reduce((a, r) => a + Number(r.nilai || 0), 0);
+  $('info-pilih').textContent = `${fmtAngka.format(n)} item dipilih`;
+  $('info-nilai').textContent = `Nilai ${fmtAngka.format(nilai)}`;
+  $('aksi-bar').hidden = !n;
+  document.body.classList.toggle('ada-aksi', n > 0);
   $('btn-tandai').hidden = state.status === 'sudah';
   $('btn-batal').hidden = state.status === 'belum';
 }
@@ -302,6 +304,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const rapikan = inp => { const n = bacaAngka(inp.value); if (Number.isFinite(n)) inp.value = fmtAngka.format(Math.round(n)); };
   $('m-tagih-isi').addEventListener('focusout', e => { if (e.target.matches('input[data-tot]')) { rapikan(e.target); hitungTotalKonfirmasi(); } });
   $('m-tagih-total').addEventListener('focusout', e => { if (!e.target.readOnly) { rapikan(e.target); hitungTotalKonfirmasi(e.target); } });
+
+  $('btn-kosong').addEventListener('click', () => {
+    state.pilih.clear();
+    document.querySelectorAll('#tbl-fg [data-pilih], #pilih-semua').forEach(c => { c.checked = false; });
+    updatePilih();
+  });
 
   $('tbl-fg').addEventListener('change', async e => {
     if (e.target.id === 'pilih-semua') {
