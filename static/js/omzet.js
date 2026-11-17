@@ -136,11 +136,13 @@ async function muat(seriBaru = false) {
     renderKpiDetail();
     renderSales();
     renderTabel();
+    renderPerubahan();
   } catch (e) {
     if (no !== state.noMuat) return;
     tampilPesan(e.message);
     state.rows = [];
     $('tbl-omzet').innerHTML = '';
+    $('tbl-ubah').innerHTML = '';
     $('list-sales').innerHTML = '';
   } finally {
     if (no === state.noMuat) {
@@ -189,7 +191,7 @@ function renderKpiDetail() {
   $('k-omzet').title = fmtAngka.format(total);
   const baru = ev.filter(o => Number(o.ke) === 1).length;
   $('k-jml').textContent = fmtAngka.format(ev.length);
-  $('k-jml-sub').textContent = `${baru} omzet baru · ${ev.length - baru} perubahan kontrak · ${state.rows.length} SO`;
+  $('k-jml-sub').textContent = `${baru} omzet diakui · ${ev.length - baru} perubahan · ${state.rows.length} SO`;
   $('k-rata').innerHTML = ev.length ? ringkas(total / ev.length) : STRIP;
   const list = state.sales_list;
   $('k-sales').textContent = fmtAngka.format(list.length);
@@ -313,39 +315,92 @@ function renderTabel() {
     return;
   }
   const n = jumlahKolomOmzet(rows);
-  const headOmzet = Array.from({ length: n }, (_, i) => `<th class="num">Omzet ${i + 1}</th>`).join('');
-  const body = rows.map(r => `
+  const headOmzet = Array.from({ length: n }, (_, i) => `<th class="num">${labelOmzet(i)}</th>`).join('');
+  const body = rows.map(r => {
+    const ubah = r.status === 'PERUBAHAN';
+    return `
     <tr>
       <td class="beku"><b>${esc(r.so_no)}</b></td>
       <td class="beku beku-teks" title="${esc(r.customer || '')}">${teks(r.customer)}</td>
       <td class="beku">${r.project_code ? `<a href="/project?kode=${encodeURIComponent(r.project_code)}">${esc(r.project_code)}</a>` : STRIP}</td>
       <td class="beku beku-akhir beku-teks" title="${esc(r.project_name || '')}">${teks(r.project_name)}</td>
+      <td>${ubah ? '<span class="status-omzet ubah">Perubahan</span>' : '<span class="status-omzet baru">Baru</span>'}</td>
       <td class="num">${angka(r.kontrak)}</td>
+      <td>${ubah ? '' : teks(r.top)}</td>
+      <td class="num">${ubah ? '' : angka(r.cash_in)}</td>
+      <td class="num">${ubah ? '' : angka(r.ots)}</td>
       ${Array.from({ length: n }, (_, i) => selOmzet(r.omzet[i])).join('')}
       <td class="num sep"><b>${angka(r.omzet_periode)}</b></td>
       <td>${teks(r.sales)}</td>
       <td>${teks(r.arsitek)}</td>
       <td>${teks(r.kontraktor)}</td>
       <td>${teks(r.pmsm)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   $('tbl-omzet').innerHTML = `
     <thead><tr>
-      <th class="beku">No SO</th><th class="beku">Customer</th><th class="beku">Kode Project</th><th class="beku beku-akhir">Nama Project</th><th class="num">Kontrak</th>
+      <th class="beku">No SO</th><th class="beku">Customer</th><th class="beku">Kode Project</th><th class="beku beku-akhir">Nama Project</th><th>Status</th><th class="num">Kontrak</th>
+      <th>TOP</th><th class="num">Cash In</th><th class="num">OTS</th>
       ${headOmzet}<th class="num sep">Omzet ${esc(labelPeriode())}</th><th>Sales</th><th>Arsitek</th><th>Kontraktor</th><th>PMSM</th>
     </tr></thead>
     <tbody>${body}</tbody>
-    <tfoot><tr><td class="beku beku-akhir" colspan="4"><b>Total</b></td><td></td><td colspan="${n}"></td><td class="num sep"><b>${angka(total)}</b></td><td colspan="4"></td></tr></tfoot>`;
-  bekukanKolom();
+    <tfoot><tr><td class="beku beku-akhir" colspan="4"><b>Total</b></td><td colspan="5"></td><td colspan="${n}"></td><td class="num sep"><b>${angka(total)}</b></td><td colspan="4"></td></tr></tfoot>`;
+  bekukanKolom($('tbl-omzet'));
 }
 
-function bekukanKolom() {
-  const tbl = $('tbl-omzet');
-  const head = [...tbl.querySelectorAll('thead th.beku')];
-  if (!head.length) return;
-  let kiri = 0;
-  const posisi = head.map(th => { const x = kiri; kiri += th.getBoundingClientRect().width; return x; });
-  tbl.querySelectorAll('tr').forEach(tr => {
-    tr.querySelectorAll('.beku').forEach((sel, i) => { sel.style.left = `${posisi[i] ?? 0}px`; });
+function urlBulan(b) {
+  const [d, s] = rentangBulan(b);
+  const p = new URLSearchParams({ dari: d, sampai: s });
+  if (state.sales) p.set('sales', state.sales);
+  return `/omzet?${p}`;
+}
+
+function renderPerubahan() {
+  const q = $('cari-omzet').value.trim().toLowerCase();
+  const ev = state.rows.filter(r => barisCocok(r, q)).flatMap(r =>
+    r.omzet.filter(o => o.masuk && Number(o.ke) > 1).map(o => ({ r, o })));
+  ev.sort((a, b) => (a.o.bulan < b.o.bulan ? -1 : a.o.bulan > b.o.bulan ? 1 : a.r.so_no.localeCompare(b.r.so_no)));
+  const total = ev.reduce((a, x) => a + Number(x.o.nilai), 0);
+  $('judul-ubah').textContent = `Perubahan nilai kontrak ${labelPeriode()} · ${ev.length} perubahan`;
+  if (!ev.length) {
+    $('tbl-ubah').innerHTML = '<tbody><tr><td class="loading">Tidak ada perubahan nilai kontrak di periode ini.</td></tr></tbody>';
+    return;
+  }
+  const body = ev.map(({ r, o }) => {
+    const asal = r.omzet[0] ? r.omzet[0].bulan : null;
+    return `
+    <tr>
+      <td class="beku"><b>${esc(r.so_no)}</b></td>
+      <td class="beku beku-teks" title="${esc(r.customer || '')}">${teks(r.customer)}</td>
+      <td class="beku">${r.project_code ? `<a href="/project?kode=${encodeURIComponent(r.project_code)}">${esc(r.project_code)}</a>` : STRIP}</td>
+      <td class="beku beku-akhir beku-teks" title="${esc(r.project_name || '')}">${teks(r.project_name)}</td>
+      <td>${labelOmzet(Number(o.ke) - 1)}</td>
+      <td>${bulan(o.bulan)}</td>
+      <td class="num"><b>${angka(o.nilai)}</b></td>
+      <td>${asal ? `<a class="link-bulan" href="${urlBulan(asal)}">${bulan(asal)}</a>` : STRIP}</td>
+      <td class="num">${angka(r.kontrak)}</td>
+      <td>${teks(r.sales)}</td>
+    </tr>`;
+  }).join('');
+  $('tbl-ubah').innerHTML = `
+    <thead><tr>
+      <th class="beku">No SO</th><th class="beku">Customer</th><th class="beku">Kode Project</th><th class="beku beku-akhir">Nama Project</th>
+      <th>Omzet</th><th>Bulan Perubahan</th><th class="num">Nilai Perubahan</th><th>Asal Bulan</th><th class="num">Kontrak Sekarang</th><th>Sales</th>
+    </tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr><td class="beku beku-akhir" colspan="4"><b>Total</b></td><td colspan="2"></td><td class="num"><b>${angka(total)}</b></td><td colspan="3"></td></tr></tfoot>`;
+  bekukanKolom($('tbl-ubah'));
+}
+
+function bekukanKolom(tbl) {
+  (tbl ? [tbl] : [$('tbl-omzet'), $('tbl-ubah')]).forEach(t => {
+    const head = [...t.querySelectorAll('thead th.beku')];
+    if (!head.length) return;
+    let kiri = 0;
+    const posisi = head.map(th => { const x = kiri; kiri += th.getBoundingClientRect().width; return x; });
+    t.querySelectorAll('tr').forEach(tr => {
+      tr.querySelectorAll('.beku').forEach((sel, i) => { sel.style.left = `${posisi[i] ?? 0}px`; });
+    });
   });
 }
 
@@ -355,11 +410,13 @@ function unduhCsv() {
   const n = jumlahKolomOmzet(rows);
   const kolom = [
     ['No SO', r => r.so_no], ['Customer', r => r.customer], ['Kode Project', r => r.project_code],
-    ['Nama Project', r => r.project_name], ['Kontrak', r => r.kontrak]
+    ['Nama Project', r => r.project_name], ['Status', r => r.status === 'PERUBAHAN' ? 'Perubahan' : 'Baru'],
+    ['Kontrak', r => r.kontrak], ['TOP', r => r.status === 'PERUBAHAN' ? '' : r.top],
+    ['Cash In', r => r.status === 'PERUBAHAN' ? '' : r.cash_in], ['OTS', r => r.status === 'PERUBAHAN' ? '' : r.ots]
   ];
   for (let i = 0; i < n; i++) {
-    kolom.push([`Omzet ${i + 1}`, r => r.omzet[i] ? r.omzet[i].nilai : '']);
-    kolom.push([`Bulan Omzet ${i + 1}`, r => r.omzet[i] ? r.omzet[i].bulan : '']);
+    kolom.push([labelOmzet(i), r => r.omzet[i] ? r.omzet[i].nilai : '']);
+    kolom.push([`Bulan ${labelOmzet(i)}`, r => r.omzet[i] ? r.omzet[i].bulan : '']);
   }
   kolom.push([`Omzet ${state.dari} sd ${state.sampai}`, r => r.omzet_periode], ['Sales', r => r.sales], ['Arsitek', r => r.arsitek],
     ['Kontraktor', r => r.kontraktor], ['PMSM', r => r.pmsm]);
@@ -378,9 +435,9 @@ function unduhCsv() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  window.addEventListener('resize', bekukanKolom);
+  window.addEventListener('resize', () => bekukanKolom());
   let t = null;
-  $('cari-omzet').addEventListener('input', () => { clearTimeout(t); t = setTimeout(renderTabel, 150); });
+  $('cari-omzet').addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { renderTabel(); renderPerubahan(); }, 150); });
   $('unduh-csv').addEventListener('click', unduhCsv);
   $('cepat').addEventListener('click', e => {
     const c = e.target.closest('.chip-f');
