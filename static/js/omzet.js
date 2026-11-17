@@ -188,6 +188,8 @@ function renderKpiDetail() {
   const ev = state.rows.flatMap(r => r.omzet.filter(o => o.masuk));
   const total = ev.reduce((a, o) => a + Number(o.nilai), 0);
   $('k-omzet').innerHTML = ringkas(total);
+  const diakui = ev.filter(o => Number(o.ke) === 1).reduce((a, o) => a + Number(o.nilai), 0);
+  $('k-omzet-sub').textContent = `Diakui ${fmtAngka.format(diakui)} · Perubahan ${fmtAngka.format(total - diakui)}`;
   $('k-omzet').title = fmtAngka.format(total);
   const baru = ev.filter(o => Number(o.ke) === 1).length;
   $('k-jml').textContent = fmtAngka.format(ev.length);
@@ -221,7 +223,7 @@ function renderChart() {
     const v = langkah * i;
     const y = skala(v);
     grid += `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}" class="grid"/>`;
-    grid += `<text x="${padL - 8}" y="${y + 4}" class="axis" text-anchor="end">${ringkas(v).replace('Rp ', '')}</text>`;
+    grid += `<text x="${padL - 8}" y="${y + 4}" class="axis" text-anchor="end">${ringkasSumbu(v).replace('Rp ', '')}</text>`;
   }
   const bars = seri.map((s, i) => {
     const x = padL + i * lebarSlot + (lebarSlot - lebarBar) / 2;
