@@ -633,8 +633,8 @@ def _nilai_item(line_amount):
     return float(math.floor(float(line_amount or 0) + 0.5))
 
 
-def _plus_ppn(dpp):
-    return float(math.floor(float(dpp or 0) * (1 + PPN) + 0.5))
+def _dpp(nilai):
+    return float(math.floor(float(nilai or 0) / (1 + PPN) + 0.5))
 
 
 @app.post("/api/penagihan/hitung")
@@ -667,10 +667,10 @@ def api_penagihan_hitung():
         [BRAND] + so_list + ["Down Payment", "%-DP%"],
     )}
     sudah = {r["so_no"]: float(r["nominal"] or 0) for r in db.query(
-        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount * %s))) AS nominal "
+        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))) AS nominal "
         "FROM app_fg_tagih t JOIN bc_sales_line l ON l.document_no = t.so_no AND l.line_no = t.line_no "
         "WHERE t.is_ticked = 1 AND t.so_no IN (" + tanda + ") GROUP BY t.so_no",
-        [1 + PPN] + so_list,
+        so_list,
     )}
     proforma = _proforma_so(so_list)
     hasil = []
@@ -682,11 +682,11 @@ def api_penagihan_hitung():
                   "qty": b["qty"], "nilai": _nilai_item(b["line_amount"])}
                  for b in baris if b["so_no"] == so_no]
         subtotal = sum(it["nilai"] for it in items)
-        dengan_ppn = _plus_ppn(subtotal)
+        dpp = _dpp(subtotal)
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
                       "top": h.get("top"), "proforma": proforma.get(so_no, []), "kontrak": kontrak, "dp": dp.get(so_no, 0),
                       "sudah_ditagih": sudah.get(so_no, 0), "sisa": sisa, "items": items,
-                      "subtotal": subtotal, "ppn": dengan_ppn - subtotal, "total": min(dengan_ppn, sisa)})
+                      "subtotal": subtotal, "dpp": dpp, "ppn": subtotal - dpp, "total": min(subtotal, sisa)})
     return jsonify(so=hasil, ppn=PPN)
 
 
