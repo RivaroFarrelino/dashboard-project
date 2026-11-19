@@ -211,8 +211,9 @@ function renderKonfirmasi(data) {
             </tr>`).join('')}
           </tbody>
           <tfoot>
-            <tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>${angka(so.subtotal)}</b></td></tr>
+            <tr><td colspan="3">DPP</td><td class="num">${angka(so.dpp)}</td></tr>
             <tr><td colspan="3">PPN ${fmtPersen.format(data.ppn * 100)}%</td><td class="num">${angka(so.ppn)}</td></tr>
+            <tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>${angka(so.subtotal)}</b></td></tr>
             <tr><td colspan="3"><b>Total</b></td><td class="num"><input class="input-nominal input-sub" data-tot inputmode="numeric" value="${fmtAngka.format(so.total)}" aria-label="Total ${esc(so.so_no)}"></td></tr>
           </tfoot>
         </table>
