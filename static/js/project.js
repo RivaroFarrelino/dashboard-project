@@ -733,9 +733,9 @@ function renderProforma(rows) {
   $('m-n-pi').textContent = `(${rows.length})`;
   if (!rows.length) { $('tbl-pi').innerHTML = '<tbody><tr><td class="loading">Belum ada proforma untuk SO ini.</td></tr></tbody>'; return; }
   const body = rows.map(r => `
-    <tr class="${r.hilang_di_bc ? 'redup' : ''}">
+    <tr class="${r.hilang_di_bc || r.is_batal ? 'redup' : ''}">
       <td>${tanggal(r.posting_date)}</td>
-      <td>${teks(r.no)} ${r.hilang_di_bc ? '<span class="badge b-red">Hilang di BC</span>' : ''}</td>
+      <td>${teks(r.no)} ${r.hilang_di_bc ? '<span class="badge b-red">Hilang di BC</span>' : ''}${r.is_batal ? ' <span class="badge b-red">Cancel</span>' : ''}</td>
       <td>${teks(r.status_pi)}</td>
       <td>${teks(r.nomor_so)}</td>
       <td>${teks(r.proforma_type)}</td>
@@ -744,8 +744,9 @@ function renderProforma(rows) {
       <td class="num">${angka(r.amount_ori)}</td>
       <td class="num">${r.currency_code ? (Number(r.kurs) > 0 ? fmtQty.format(r.kurs) : '<span class="badge b-amber">Kurs kosong</span>') : '1'}</td>
       <td class="num">${angka(r.nilai)}</td>
-      <td class="num">${angka(r.dibayar)}</td>
+      <td class="num">${r.is_batal && Number(r.dibayar) ? `<s>${angka(r.dibayar)}</s>` : angka(r.dibayar)}</td>
       <td>${teks(r.external_document_no)}</td>
+      <td>${teks(r.your_reference)}</td>
       <td>${teks(r.remark)}</td>
       <td>${teks(r.posting_description)}</td>
     </tr>`).join('');
@@ -753,7 +754,7 @@ function renderProforma(rows) {
     <thead><tr>
       <th>Tanggal Proforma</th><th>Nomor</th><th>Status PI</th><th>Nomor SO</th><th>Proforma Type</th><th>Due Date PI</th>
       <th>Currency</th><th class="num">Amount Ori</th><th class="num">Kurs</th><th class="num">Nilai</th><th class="num">Dibayar (PCI)</th>
-      <th>Ext Doc No</th><th>Remark</th><th>Posting Description</th>
+      <th>Ext Doc No</th><th>Your Reference</th><th>Remark</th><th>Posting Description</th>
     </tr></thead>
     <tbody>${body}</tbody>`;
 }
