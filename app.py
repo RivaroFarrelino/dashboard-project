@@ -357,7 +357,8 @@ def api_so_dokumen(so_no):
     proforma = db.query(
         "SELECT h.no, h.posting_date, h.status_pi, h.doc_status, h.nomor_so, h.proforma_type, h.due_date, "
         "h.currency_code, h.kurs, h.external_document_no, h.remark, h.posting_description, "
-        "(h.missing_in_bc_since IS NOT NULL) AS hilang_di_bc, "
+        "(h.missing_in_bc_since IS NOT NULL) AS hilang_di_bc, (h.is_batal = 1 AND COALESCE((SELECT SUM(pl.line_amount) FROM bc_proforma_line pl WHERE pl.document_no = h.no), 0) >= 0) AS is_batal, "
+        "COALESCE(NULLIF(h.your_reference_txt, ''), h.your_reference) AS your_reference, "
         "COALESCE((SELECT SUM(pl.amount_ori) FROM bc_proforma_line pl WHERE pl.document_no = h.no), 0) AS amount_ori, "
         "COALESCE((SELECT SUM(ci.amount) FROM bc_cashier_in_line ci WHERE ci.document_no = h.no AND ci.brand = %s), 0) AS dibayar "
         "FROM bc_proforma_header h WHERE h.nomor_so = %s ORDER BY h.posting_date, h.no",
@@ -661,7 +662,7 @@ def api_penagihan_hitung():
         "UNION ALL SELECT target_pi, amount FROM app_nopay_alloc WHERE amount > 0 "
         "UNION ALL SELECT source_pi, -amount FROM app_nopay_alloc WHERE amount > 0 AND source_pi IS NOT NULL"
         ") x JOIN bc_proforma_header pi ON pi.no = x.pi_no "
-        "WHERE pi.nomor_so IN (" + tanda + ") "
+        "WHERE pi.nomor_so IN (" + tanda + ") AND NOT (pi.is_batal = 1 AND COALESCE((SELECT SUM(pl.line_amount) FROM bc_proforma_line pl WHERE pl.document_no = pi.no), 0) >= 0) "
         "AND (pi.proforma_type = %s OR (pi.proforma_type IS NULL AND pi.external_document_no LIKE %s)) "
         "GROUP BY pi.nomor_so",
         [BRAND] + so_list + ["Down Payment", "%-DP%"],
