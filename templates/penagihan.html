@@ -12,7 +12,7 @@
 <div class="filter-bar card">
   <div class="search search-sm">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-    <input id="f-cari" type="search" placeholder="Cari SO, project, customer, item, prod order, FPPP">
+    <input id="f-cari" type="search" placeholder="Cari SO, project, customer, item, FPPP, kode opening/unit">
   </div>
   <div class="segmen" id="f-status" role="tablist">
     <button data-v="belum" class="aktif">Belum ditagih</button>
@@ -20,7 +20,7 @@
     <button data-v="semua">Semua</button>
   </div>
   <label class="select-wrap inline">
-    <span class="muted small">Output</span>
+    <span class="muted small">FPPP selesai</span>
     <select id="f-periode">
       <option value="30">30 hari terakhir</option>
       <option value="90" selected>90 hari terakhir</option>
@@ -32,18 +32,16 @@
 </div>
 
 <div class="kpi-grid kpi-3">
-  <div class="card kpi"><div class="kpi-label">Item FG sudah output</div><div class="kpi-value" id="k-fg">–</div><div class="kpi-sub" id="k-fg-sub"></div></div>
+  <div class="card kpi"><div class="kpi-label">Item FG siap tagih</div><div class="kpi-value" id="k-fg">–</div><div class="kpi-sub" id="k-fg-sub"></div></div>
   <div class="card kpi"><div class="kpi-label">Sudah ditagih</div><div class="kpi-value" id="k-tagih">–</div><div class="kpi-sub" id="k-tagih-sub"></div><div class="bar"><span id="k-tagih-bar"></span></div></div>
   <div class="card kpi"><div class="kpi-label">Belum ditagih</div><div class="kpi-value" id="k-belum">–</div><div class="kpi-sub" id="k-belum-sub"></div></div>
 </div>
 
 <div class="card">
   <div class="card-head">
-    <h3 id="judul-tabel">Daftar item FG</h3>
+    <h3 id="judul-tabel">Daftar FG</h3>
   </div>
-  <div class="table-wrap wrap-beku">
-    <table class="tbl" id="tbl-fg"></table>
-  </div>
+  <div class="fg-list" id="tbl-fg"></div>
   <div class="pager">
     <span class="muted small" id="info-halaman"></span>
     <div class="toolbar">
