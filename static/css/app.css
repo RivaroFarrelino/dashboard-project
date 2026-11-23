@@ -671,3 +671,19 @@ body.ada-aksi .pager { margin-bottom: 72px; }
   .fg-so-head > div:nth-child(n+3):not(.fg-tagih), .fg-op-head > div:nth-child(n+3):not(.fg-tagih) { display: none; }
   .fg-so-isi { padding-left: 12px; }
 }
+
+.btn-riwayat { margin-left: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font: inherit; font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px; cursor: pointer; vertical-align: 1px; }
+.btn-riwayat:hover { color: var(--text); border-color: var(--text); }
+.riwayat-ringkas { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.riwayat-kpi { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.riwayat-kpi span { font-size: 11px; color: var(--muted); }
+.riwayat-kpi b { font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.riwayat-kpi small { font-size: 11px; color: var(--muted); }
+.riwayat-baris { cursor: pointer; }
+.riwayat-baris:hover td { background: var(--surface-2); }
+.riwayat-baris .panah { width: 14px; height: 14px; color: var(--muted); transition: transform .15s; }
+.riwayat-baris.buka .panah { transform: rotate(90deg); }
+.riwayat-baris.batal td { color: var(--muted); }
+.riwayat-item > td { background: var(--surface-2); padding: 8px 12px; }
+.riwayat-item .tbl { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+@media (max-width: 860px) { .riwayat-ringkas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
