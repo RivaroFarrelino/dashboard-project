@@ -163,7 +163,7 @@ function renderTabel() {
       <div class="fg-so ${bukaSo ? 'buka' : ''}" data-so="${esc(g.so)}">
         <div class="fg-so-head" data-toggle-so="${esc(g.so)}">
           ${cek('so', g.so, `Pilih ${g.so}`)}
-          <div class="fg-judul">${SVG_PANAH}<div><b>${esc(g.so)}</b><div class="small muted">${g.info.project_code ? `<a href="/project?kode=${encodeURIComponent(g.info.project_code)}">${esc(g.info.project_code)}</a>` : ''} ${teks(g.info.quo)}</div></div></div>
+          <div class="fg-judul">${SVG_PANAH}<div><b>${esc(g.so)}</b> <button type="button" class="btn-riwayat" data-riwayat="${esc(g.so)}">Riwayat</button><div class="small muted">${g.info.project_code ? `<a href="/project?kode=${encodeURIComponent(g.info.project_code)}">${esc(g.info.project_code)}</a>` : ''} ${teks(g.info.quo)}</div></div></div>
           ${sel('wrap', teks(g.info.customer))}
           ${sel('', teks(g.info.top))}
           ${sel('', daftarPi(g.info.proforma))}
@@ -316,7 +316,7 @@ function renderKonfirmasi(data) {
             <tr><td colspan="5"><b>Subtotal</b></td><td class="num"><b>${angka(so.subtotal)}</b></td></tr>
             <tr><td colspan="5">Item sudah ditagih</td><td class="num">${angka(so.item_sebelum)}</td></tr>
             <tr><td colspan="5">Sudah tertutup</td><td class="num">${angka(-so.tertutup)}</td></tr>
-            <tr><td colspan="5"><b>Total</b>${Number(so.total) === 0 ? ' <span class="badge b-gray">Tertutup DP</span>' : ''}</td><td class="num"><input class="input-nominal input-sub" data-tot inputmode="numeric" value="${fmtAngka.format(so.total)}" aria-label="Total ${esc(so.so_no)}"></td></tr>
+            <tr><td colspan="5"><b>Total</b></td><td class="num"><input class="input-nominal input-sub" data-tot inputmode="numeric" value="${fmtAngka.format(so.total)}" aria-label="Total ${esc(so.so_no)}"></td></tr>
           </tfoot>
         </table>
       </div>
@@ -359,6 +359,63 @@ async function simpanKonfirmasi() {
     toast(e.message);
     tombol.disabled = false;
   }
+}
+
+async function bukaRiwayat(so) {
+  const isi = $('m-riwayat-isi');
+  $('m-riwayat-sub').textContent = so;
+  isi.innerHTML = '<div class="loading">Memuat riwayat…</div>';
+  $('m-riwayat').hidden = false;
+  document.body.style.overflow = 'hidden';
+  try {
+    const d = await ambilJson(`/api/penagihan/riwayat/${encodeURIComponent(so)}`);
+    const r = d.ringkas;
+    $('m-riwayat-sub').textContent = [r.so_no, r.customer, r.project_code, r.top].filter(Boolean).join(' · ');
+    const kpi = [
+      ['Kontrak', r.kontrak], ['DP terbayar', r.dp], ['Cash in', r.cash_in],
+      ['Item ditagih', r.nilai_item, `${r.jml_item} item`], ['Nominal ditagih', r.nominal], ['Sisa kontrak', r.sisa]
+    ].map(([l, v, sub]) => `<div class="riwayat-kpi"><span>${l}</span><b>${angka(v)}</b>${sub ? `<small>${sub}</small>` : ''}</div>`).join('');
+    const baris = d.riwayat.map((e, i) => {
+      const batal = e.aksi === 'UNTICK';
+      const items = e.items.map(it => `
+        <tr>
+          <td>${teks(it.kode_opening)}</td><td>${teks(it.kode_unit)}</td><td>${teks(it.item_no)}</td>
+          <td class="wrap">${teks(it.nama_item)}</td><td class="num">${qty(it.qty)}</td>
+          <td class="num">${angka(it.line_amount)}</td><td class="num">${angka(it.nilai)}</td>
+        </tr>`).join('');
+      return `
+        <tr class="riwayat-baris ${batal ? 'batal' : ''}" data-buka="${i}">
+          <td>${SVG_PANAH}</td>
+          <td>${e.waktu ? `${tanggal(e.waktu)} ${esc(String(e.waktu).slice(11, 16))}` : STRIP}</td>
+          <td>${teks(e.oleh)}</td>
+          <td>${batal ? '<span class="badge b-red">Batal</span>' : '<span class="badge b-green">Tagih</span>'}</td>
+          <td class="num">${e.items.length}</td>
+          <td class="num">${angka(e.nilai_item)}</td>
+          <td class="num"><b>${batal ? angka(-e.nominal) : angka(e.nominal)}</b></td>
+        </tr>
+        <tr class="riwayat-item" data-isi="${i}" hidden><td></td><td colspan="6">
+          <table class="tbl">
+            <thead><tr><th>Kode Opening</th><th>Kode Unit</th><th>Item No</th><th>Nama Item</th><th class="num">Qty</th><th class="num">Nilai Item</th><th class="num">Nominal</th></tr></thead>
+            <tbody>${items}</tbody>
+          </table>
+        </td></tr>`;
+    }).join('');
+    isi.innerHTML = `
+      <div class="riwayat-ringkas">${kpi}</div>
+      <div class="table-wrap">
+        <table class="tbl riwayat-tbl">
+          <thead><tr><th></th><th>Waktu</th><th>Oleh</th><th>Aksi</th><th class="num">Item</th><th class="num">Nilai Item</th><th class="num">Nominal</th></tr></thead>
+          <tbody>${baris || '<tr><td colspan="7" class="loading">Belum ada penagihan.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    isi.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+  }
+}
+
+function tutupRiwayat() {
+  $('m-riwayat').hidden = true;
+  document.body.style.overflow = '';
 }
 
 async function aksiMassal(tagih) {
@@ -406,6 +463,17 @@ document.addEventListener('DOMContentLoaded', () => {
   $('m-tagih-isi').addEventListener('focusout', e => { if (e.target.matches('input[data-tot]')) { rapikan(e.target); hitungTotalKonfirmasi(); } });
   $('m-tagih-total').addEventListener('focusout', e => { if (!e.target.readOnly) { rapikan(e.target); hitungTotalKonfirmasi(e.target); } });
 
+  document.querySelectorAll('[data-tutup-riwayat]').forEach(b => b.addEventListener('click', tutupRiwayat));
+  $('m-riwayat').addEventListener('click', e => {
+    if (e.target === $('m-riwayat')) { tutupRiwayat(); return; }
+    const tr = e.target.closest('tr[data-buka]');
+    if (!tr) return;
+    const isi = $('m-riwayat-isi').querySelector(`tr[data-isi="${tr.dataset.buka}"]`);
+    isi.hidden = !isi.hidden;
+    tr.classList.toggle('buka', !isi.hidden);
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('m-riwayat').hidden) tutupRiwayat(); });
+
   $('btn-kosong').addEventListener('click', () => {
     state.pilih.clear();
     syncCek();
@@ -422,7 +490,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   $('tbl-fg').addEventListener('click', e => {
-    if (e.target.closest('label.cek-area, input, a')) return;
+    const rw = e.target.closest('[data-riwayat]');
+    if (rw) { bukaRiwayat(rw.dataset.riwayat); return; }
+    if (e.target.closest('label.cek-area, input, a, button')) return;
     const so = e.target.closest('[data-toggle-so]');
     const op = e.target.closest('[data-toggle-op]');
     const toggle = (set, key, wadah, isi) => {
