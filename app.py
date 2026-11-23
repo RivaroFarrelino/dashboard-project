@@ -511,38 +511,55 @@ FPPP_NO = (
     + ", ".join(f"'{v}'" for v in FPPP_BRAND.values())
     + f"), '/', SUBSTRING({FPPP_KODE}, 4, 2), '/20', SUBSTRING({FPPP_KODE}, 2, 2)), {FPPP_KODE})"
 )
-UKURAN_HALAMAN = 100
+UKURAN_HALAMAN_SO = 25
+FG_COND = (
+    "l.brand = %s AND l.type = 'Item' AND l.item_no <> 'SO-AST' "
+    "AND COALESCE(l.parent_item_no, l.item_no) = l.item_no AND l.line_amount <> 0"
+)
+FPPP_STAT = (
+    "(SELECT l.document_no AS so_no, " + FPPP_KODE + " AS fk, COUNT(*) AS n, "
+    "SUM(COALESCE(o.qty_output, 0) >= l.quantity) AS n_ok, MAX(o.tgl_output) AS tgl "
+    "FROM bc_sales_line l LEFT JOIN app_calc_item_output o ON o.item_no = l.item_no "
+    "WHERE " + FG_COND + " GROUP BY l.document_no, fk) f"
+)
 FROM_PENAGIHAN = (
     "FROM bc_sales_line l "
-    "JOIN app_calc_item_output o ON o.item_no = l.item_no "
     "JOIN bc_sales_header h ON h.no = l.document_no "
+    "LEFT JOIN app_calc_item_output o ON o.item_no = l.item_no "
     "LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
+    "LEFT JOIN bc_item i ON i.no = l.item_no "
+    "JOIN " + FPPP_STAT + " ON f.so_no = l.document_no AND f.fk = " + FPPP_KODE + " "
 )
+FPPP_SIAP = "f.n_ok = f.n"
+FILTER_STATUS = {
+    "belum": "AND COALESCE(t.is_ticked, 0) = 0 AND " + FPPP_SIAP + " ",
+    "sudah": "AND t.is_ticked = 1 ",
+    "semua": "AND (t.is_ticked = 1 OR " + FPPP_SIAP + ") ",
+}
 
 
 def _filter_penagihan(args):
     periode = args.get("periode", "90")
+    where = "WHERE " + FG_COND + " "
+    params = [BRAND, BRAND]
+    sejak = None
     if periode in PERIODE_HARI:
         sejak = date.today() - timedelta(days=PERIODE_HARI[periode])
     elif periode == "tahun":
         sejak = date(date.today().year, 1, 1)
-    else:
-        sejak = date(2000, 1, 1)
-    where = (
-        "WHERE l.brand = %s AND l.type = 'Item' AND l.item_no <> 'SO-AST' "
-        "AND COALESCE(l.parent_item_no, l.item_no) = l.item_no AND l.line_amount <> 0 "
-        "AND o.qty_output > 0 AND o.tgl_output >= %s "
-    )
-    params = [BRAND, sejak]
-    q = args.get("q", "").strip()
+    if sejak:
+        where += "AND f.tgl >= %s "
+        params.append(sejak)
+    q = args.get("q", "").strip()[:100]
     if q:
         like = f"%{q}%"
         where += (
             "AND (l.document_no LIKE %s OR h.project_code LIKE %s OR h.project_name LIKE %s "
             "OR h.sell_to_customer_name LIKE %s OR l.item_no LIKE %s OR h.external_document_no LIKE %s "
-            "OR o.prod_order_no LIKE %s OR " + FPPP_KODE + " LIKE %s OR " + FPPP_NO + " LIKE %s) "
+            "OR o.prod_order_no LIKE %s OR " + FPPP_KODE + " LIKE %s OR " + FPPP_NO + " LIKE %s "
+            "OR i.kode_opening LIKE %s OR i.kode_unit LIKE %s) "
         )
-        params += [like] * 9
+        params += [like] * 11
     return where, params
 
 
@@ -555,6 +572,7 @@ def page_penagihan():
 def api_penagihan():
     where, params = _filter_penagihan(request.args)
     status = request.args.get("status", "belum")
+    filter_status = FILTER_STATUS.get(status, FILTER_STATUS["belum"])
     try:
         halaman = max(1, int(request.args.get("halaman", "1")))
     except ValueError:
@@ -564,30 +582,38 @@ def api_penagihan():
         "COALESCE(SUM(t.is_ticked = 1), 0) AS jml_tagih, "
         "COALESCE(SUM(IF(t.is_ticked = 1, l.line_amount, 0)), 0) AS nilai_tagih, "
         "COALESCE(SUM(IF(t.is_ticked = 1, t.nilai_tagih, 0)), 0) AS nominal_tagih "
-        + FROM_PENAGIHAN + where,
+        + FROM_PENAGIHAN + where + FILTER_STATUS["semua"],
         params,
     )
-    filter_status = ""
-    if status == "belum":
-        filter_status = "AND COALESCE(t.is_ticked, 0) = 0 "
-    elif status == "sudah":
-        filter_status = "AND t.is_ticked = 1 "
-    total = db.query_one("SELECT COUNT(*) AS n " + FROM_PENAGIHAN + where + filter_status, params)["n"]
-    rows = db.query(
-        "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
-        "l.line_amount AS nilai, " + FPPP_NO + " AS fppp_no, " + FPPP_KODE + " AS fppp_kode, o.prod_order_no, "
-        "o.qty_output, o.tgl_output, h.external_document_no AS quo, h.project_code, h.project_name, "
-        "h.sell_to_customer_name AS customer, h.payment_terms_code AS top, "
-        "COALESCE(t.is_ticked, 0) AS is_ticked, t.nilai_tagih, t.updated_by, "
-        "DATE_FORMAT(t.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at "
+    so_page = db.query(
+        "SELECT l.document_no AS so_no, MAX(f.tgl) AS tgl, COUNT(*) OVER () AS total "
         + FROM_PENAGIHAN + where + filter_status
-        + "ORDER BY o.tgl_output DESC, l.document_no, l.line_no LIMIT %s OFFSET %s",
-        params + [UKURAN_HALAMAN, (halaman - 1) * UKURAN_HALAMAN],
+        + "GROUP BY l.document_no ORDER BY tgl DESC, so_no DESC LIMIT %s OFFSET %s",
+        params + [UKURAN_HALAMAN_SO, (halaman - 1) * UKURAN_HALAMAN_SO],
     )
-    proforma = _proforma_so(list(dict.fromkeys(r["so_no"] for r in rows)))
+    total = so_page[0]["total"] if so_page else 0
+    so_list = [r["so_no"] for r in so_page]
+    rows = []
+    if so_list:
+        rows = db.query(
+            "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
+            "l.line_amount AS nilai, " + FPPP_NO + " AS fppp_no, " + FPPP_KODE + " AS fppp_kode, o.prod_order_no, "
+            "o.qty_output, o.tgl_output, f.tgl AS tgl_fppp, i.kode_opening, i.kode_unit, "
+            "h.external_document_no AS quo, h.project_code, h.project_name, "
+            "h.sell_to_customer_name AS customer, h.payment_terms_code AS top, "
+            "COALESCE(t.is_ticked, 0) AS is_ticked, t.nilai_tagih, t.updated_by, "
+            "DATE_FORMAT(t.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at "
+            + FROM_PENAGIHAN + where + filter_status
+            + "AND l.document_no IN (" + ", ".join(["%s"] * len(so_list)) + ") "
+            "ORDER BY l.document_no, COALESCE(i.kode_opening, 'zzz'), i.kode_unit, l.line_no",
+            params + so_list,
+        )
+    proforma = _proforma_so(so_list)
+    urutan = {so: i for i, so in enumerate(so_list)}
+    rows.sort(key=lambda r: urutan.get(r["so_no"], 0))
     for r in rows:
         r["proforma"] = proforma.get(r["so_no"], [])
-    return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN, rows=rows)
+    return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN_SO, rows=rows)
 
 
 def _proforma_so(so_list):
@@ -621,8 +647,9 @@ def _baris_tagih(kunci):
     kondisi = " OR ".join(["(l.document_no = %s AND l.line_no = %s)"] * len(kunci))
     rows = db.query(
         "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
-        "l.line_amount, COALESCE(t.is_ticked, 0) AS is_ticked "
+        "l.line_amount, COALESCE(t.is_ticked, 0) AS is_ticked, i.kode_opening, i.kode_unit "
         "FROM bc_sales_line l LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
+        "LEFT JOIN bc_item i ON i.no = l.item_no "
         "WHERE l.brand = %s AND (" + kondisi + ")",
         [BRAND] + [v for k in kunci for v in k],
     )
@@ -680,6 +707,7 @@ def api_penagihan_hitung():
         kontrak = float(h.get("kontrak") or 0)
         sisa = float(max(0, round(kontrak - dp.get(so_no, 0) - sudah.get(so_no, 0))))
         items = [{"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"], "nama_item": b["nama_item"],
+                  "kode_opening": b.get("kode_opening"), "kode_unit": b.get("kode_unit"),
                   "qty": b["qty"], "nilai": _nilai_item(b["line_amount"])}
                  for b in baris if b["so_no"] == so_no]
         subtotal = sum(it["nilai"] for it in items)
