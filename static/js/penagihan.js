@@ -132,6 +132,7 @@ function renderTabel() {
           <td class="num">${qty(r.qty)}</td>
           <td class="num">${angka(r.nilai)}</td>
           <td>${tanggal(r.tgl_output)}</td>
+          <td>${tanggal(r.tgl_tarik)}</td>
           <td>${teks(r.prod_order_no)}</td>
           <td class="num">${r.is_ticked && ada(r.nilai_tagih) ? `<b>${angka(r.nilai_tagih)}</b>` : ''}</td>
           <td class="small muted">${r.is_ticked ? `${teks(r.updated_by)}<br>${teks(r.updated_at)}` : ''}</td>
@@ -151,7 +152,7 @@ function renderTabel() {
             <table class="tbl fg-item">
               <thead><tr>
                 <th class="cek"></th><th>Kode Unit</th><th>Item No</th><th>Nama Item</th><th class="num">Qty</th><th class="num">Nilai</th>
-                <th>Tanggal Output</th><th>Prod Order No</th><th class="num">Nominal Tagih</th><th>Ditandai oleh</th>
+                <th>Tanggal Output</th><th>Tanggal Tarik</th><th>Prod Order No</th><th class="num">Nominal Tagih</th><th>Ditandai oleh</th>
               </tr></thead>
               <tbody>${items}</tbody>
             </table>
