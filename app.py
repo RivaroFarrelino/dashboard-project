@@ -2,6 +2,7 @@ import logging
 import math
 import os
 import re
+import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -648,7 +649,7 @@ def _baris_tagih(kunci):
     kondisi = " OR ".join(["(l.document_no = %s AND l.line_no = %s)"] * len(kunci))
     rows = db.query(
         "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
-        "l.line_amount, COALESCE(t.is_ticked, 0) AS is_ticked, i.kode_opening, i.kode_unit "
+        "l.line_amount, COALESCE(t.is_ticked, 0) AS is_ticked, t.nilai_tagih, i.kode_opening, i.kode_unit "
         "FROM bc_sales_line l LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
         "LEFT JOIN bc_item i ON i.no = l.item_no "
         "WHERE l.brand = %s AND (" + kondisi + ")",
@@ -759,6 +760,7 @@ def api_penagihan_tandai():
                 nominal[(b["so_no"], b["line_no"])] = bagian
                 sisa -= bagian
     oleh = g.user["username"]
+    batch = datetime.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3)
     if ubah:
         perintah = []
         for b in ubah:
@@ -772,13 +774,69 @@ def api_penagihan_tandai():
                 (b["so_no"], b["line_no"], b["item_no"], b["qty"] if tagih else 0, nilai, 1 if tagih else 0, oleh),
             ))
             perintah.append((
-                "INSERT INTO app_fg_tagih_log (so_no, line_no, item_no, action, qty, nilai, done_by) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (b["so_no"], b["line_no"], b["item_no"], "TICK" if tagih else "UNTICK", b["qty"], nilai, oleh),
+                "INSERT INTO app_fg_tagih_log (so_no, line_no, item_no, action, qty, nilai, done_by, batch) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (b["so_no"], b["line_no"], b["item_no"], "TICK" if tagih else "UNTICK", b["qty"],
+                 nilai if tagih else b.get("nilai_tagih"), oleh, batch),
             ))
         db.transaksi(perintah)
         log.info("Penagihan FG: %s item di%s oleh %s", len(ubah), "tandai" if tagih else "batalkan", oleh)
     return jsonify(diubah=len(ubah), oleh=oleh, nominal={f"{k[0]}|{k[1]}": v for k, v in nominal.items()})
+
+@app.get("/api/penagihan/riwayat/<so_no>")
+def api_penagihan_riwayat(so_no):
+    so_no = so_no[:20]
+    h = db.query_one(
+        "SELECT h.no AS so_no, h.sell_to_customer_name AS customer, h.project_code, h.payment_terms_code AS top, "
+        "h.contract_amount AS kontrak, COALESCE(c.paid, 0) AS cash_in "
+        "FROM bc_sales_header h LEFT JOIN app_calc_so c ON c.so_no = h.no WHERE h.no = %s AND h.brand = %s",
+        (so_no, BRAND),
+    )
+    if not h:
+        return jsonify(pesan="SO tidak ditemukan."), 404
+    aktif = db.query_one(
+        "SELECT COUNT(*) AS jml, COALESCE(SUM(l.line_amount), 0) AS nilai_item, "
+        "COALESCE(SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))), 0) AS nominal "
+        "FROM app_fg_tagih t JOIN bc_sales_line l ON l.document_no = t.so_no AND l.line_no = t.line_no "
+        "WHERE t.so_no = %s AND t.is_ticked = 1",
+        (so_no,),
+    ) or {}
+    log_rows = db.query(
+        "SELECT g.id, g.line_no, g.item_no, g.action, g.qty, g.nilai, g.done_by, g.batch, "
+        "DATE_FORMAT(g.done_at, '%%Y-%%m-%%d %%H:%%i') AS waktu, l.description AS nama_item, l.line_amount, "
+        "i.kode_opening, i.kode_unit "
+        "FROM app_fg_tagih_log g "
+        "LEFT JOIN bc_sales_line l ON l.document_no = g.so_no AND l.line_no = g.line_no "
+        "LEFT JOIN bc_item i ON i.no = g.item_no "
+        "WHERE g.so_no = %s ORDER BY g.done_at DESC, g.id DESC LIMIT 2000",
+        (so_no,),
+    )
+    grup = {}
+    for r in log_rows:
+        k = r["batch"] or f'{r["action"]}|{r["done_by"]}|{r["waktu"]}'
+        e = grup.setdefault(k, {"waktu": r["waktu"], "oleh": r["done_by"], "aksi": r["action"],
+                                "nilai_item": 0.0, "nominal": 0.0, "items": []})
+        e["nilai_item"] += float(r["line_amount"] or 0)
+        e["nominal"] += float(r["nilai"] or 0)
+        e["items"].append({k2: r[k2] for k2 in ("line_no", "item_no", "nama_item", "kode_opening", "kode_unit", "qty", "line_amount", "nilai")})
+    dp = db.query_one(
+        "SELECT COALESCE(SUM(x.amount), 0) AS dp FROM ("
+        "SELECT document_no AS pi_no, amount FROM bc_cashier_in_line WHERE brand = %s "
+        "UNION ALL SELECT target_pi, amount FROM app_nopay_alloc WHERE amount > 0 "
+        "UNION ALL SELECT source_pi, -amount FROM app_nopay_alloc WHERE amount > 0 AND source_pi IS NOT NULL"
+        ") x JOIN bc_proforma_header pi ON pi.no = x.pi_no "
+        "WHERE pi.nomor_so = %s AND NOT (pi.is_batal = 1 AND COALESCE((SELECT SUM(pl.line_amount) FROM bc_proforma_line pl WHERE pl.document_no = pi.no), 0) >= 0) "
+        "AND (pi.proforma_type = %s OR (pi.proforma_type IS NULL AND pi.external_document_no LIKE %s))",
+        (BRAND, so_no, "Down Payment", "%-DP%"),
+    ) or {}
+    kontrak = float(h["kontrak"] or 0)
+    dp_so = float(dp.get("dp") or 0)
+    nominal = float(aktif.get("nominal") or 0)
+    tertutup = max(float(h["cash_in"] or 0), dp_so + nominal)
+    ringkas = {**h, "dp": dp_so, "jml_item": aktif.get("jml") or 0, "nilai_item": aktif.get("nilai_item") or 0,
+               "nominal": nominal, "tertutup": tertutup, "sisa": max(0.0, kontrak - tertutup)}
+    return jsonify(ringkas=ringkas, riwayat=list(grup.values()))
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), debug=False)
