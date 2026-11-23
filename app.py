@@ -714,7 +714,7 @@ def api_penagihan_hitung():
         h = header.get(so_no) or {}
         kontrak = float(h.get("kontrak") or 0)
         dp_so, sudah_so, cash_so = dp.get(so_no, 0), sudah.get(so_no, 0), cash.get(so_no, 0)
-        tertutup = max(cash_so, dp_so + sudah_so)
+        tertutup = dp_so + sudah_so
         sisa = float(max(0, round(kontrak - tertutup)))
         items = [{"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"], "nama_item": b["nama_item"],
                   "kode_opening": b.get("kode_opening"), "kode_unit": b.get("kode_unit"),
@@ -832,7 +832,7 @@ def api_penagihan_riwayat(so_no):
     kontrak = float(h["kontrak"] or 0)
     dp_so = float(dp.get("dp") or 0)
     nominal = float(aktif.get("nominal") or 0)
-    tertutup = max(float(h["cash_in"] or 0), dp_so + nominal)
+    tertutup = dp_so + nominal
     ringkas = {**h, "dp": dp_so, "jml_item": aktif.get("jml") or 0, "nilai_item": aktif.get("nilai_item") or 0,
                "nominal": nominal, "tertutup": tertutup, "sisa": max(0.0, kontrak - tertutup)}
     return jsonify(ringkas=ringkas, riwayat=list(grup.values()))
