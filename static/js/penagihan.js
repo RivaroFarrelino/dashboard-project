@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaOp: new Set() };
+const state = { status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaFp: new Set(), bukaOp: new Set() };
 
 const kunci = r => `${r.so_no}|${r.line_no}`;
 
@@ -33,7 +33,7 @@ async function muat() {
     state.data = data;
     state.pilih.clear();
     if (params.get('q')) {
-      data.rows.forEach(r => { state.bukaSo.add(r.so_no); state.bukaOp.add(kunciOp(r.so_no, r.kode_opening || TANPA_OPENING)); });
+      data.rows.forEach(r => { state.bukaSo.add(r.so_no); state.bukaFp.add(kunciFp(r)); state.bukaOp.add(kunciOpR(r)); });
     }
     renderRingkas();
     renderTabel();
@@ -63,22 +63,34 @@ function daftarPi(list) {
 }
 
 const TANPA_OPENING = '(tanpa kode opening)';
-const kunciOp = (so, op) => `${so}|${op}`;
+const labelFp = r => r.fppp_no || r.fppp_kode || '(tanpa FPPP)';
+const kunciFp = r => `${r.so_no}|${labelFp(r)}`;
+const kunciOpR = r => `${kunciFp(r)}|${r.kode_opening || TANPA_OPENING}`;
 const bisaDipilih = r => state.status === 'semua' || (state.status === 'sudah' ? Boolean(r.is_ticked) : !r.is_ticked);
 const SVG_PANAH = '<svg class="panah" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
 
 function kelompok(rows) {
   const so = new Map();
   rows.forEach(r => {
-    if (!so.has(r.so_no)) so.set(r.so_no, { so: r.so_no, info: r, rows: [], ops: new Map() });
+    if (!so.has(r.so_no)) so.set(r.so_no, { so: r.so_no, info: r, rows: [], fps: new Map() });
     const g = so.get(r.so_no);
     g.rows.push(r);
-    const op = r.kode_opening || TANPA_OPENING;
-    if (!g.ops.has(op)) g.ops.set(op, { op, rows: [] });
-    g.ops.get(op).rows.push(r);
+    const fk = kunciFp(r);
+    if (!g.fps.has(fk)) g.fps.set(fk, { key: fk, fp: labelFp(r), rows: [], ops: new Map() });
+    const f = g.fps.get(fk);
+    f.rows.push(r);
+    const ok = kunciOpR(r);
+    if (!f.ops.has(ok)) f.ops.set(ok, { key: ok, op: r.kode_opening || TANPA_OPENING, rows: [] });
+    f.ops.get(ok).rows.push(r);
   });
-  return [...so.values()].map(g => ({ ...g, ops: [...g.ops.values()] }));
+  return [...so.values()].map(g => ({
+    ...g,
+    nOp: [...g.fps.values()].reduce((a, f) => a + f.ops.size, 0),
+    fps: [...g.fps.values()].map(f => ({ ...f, ops: [...f.ops.values()] }))
+  }));
 }
+
+const tglMaks = (rows, k) => rows.reduce((m, r) => (r[k] && (!m || r[k] > m) ? r[k] : m), null);
 
 function ringkasGrup(rows) {
   const tagih = rows.filter(r => r.is_ticked);
@@ -117,12 +129,14 @@ function renderTabel() {
   const body = grup.map(g => {
     const rg = ringkasGrup(g.rows);
     const bukaSo = state.bukaSo.has(g.so);
-    const ops = g.ops.map(o => {
-      const ko = kunciOp(g.so, o.op);
+    const fps = g.fps.map(f => {
+      const rf = ringkasGrup(f.rows);
+      const bukaFp = state.bukaFp.has(f.key);
+      const ops = f.ops.map(o => {
+      const ko = o.key;
       const ro = ringkasGrup(o.rows);
       const bukaOp = state.bukaOp.has(ko);
-      const fppp = [...new Set(o.rows.map(r => r.fppp_no).filter(Boolean))].join(', ');
-      const selesai = o.rows.reduce((m, r) => (r.tgl_fppp && (!m || r.tgl_fppp > m) ? r.tgl_fppp : m), null);
+      const unit = o.rows.map(r => r.kode_unit).filter(Boolean);
       const items = o.rows.map(r => `
         <tr class="${r.is_ticked ? 'ditagih' : ''}" data-k="${esc(kunci(r))}">
           <td class="cek">${cek('item', kunci(r), `Pilih ${r.item_no}`)}</td>
@@ -142,8 +156,8 @@ function renderTabel() {
           <div class="fg-op-head" data-toggle-op="${esc(ko)}">
             ${cek('op', ko, `Pilih opening ${o.op}`)}
             <div class="fg-judul">${SVG_PANAH}<b>${esc(o.op)}</b></div>
-            ${sel('', `<span class="muted small">FPPP</span> ${teks(fppp)}`)}
-            ${sel('', `<span class="muted small">Selesai</span> ${tanggal(selesai)}`)}
+            ${sel('fg-unit small muted', unit.length ? esc(unit.join(', ')) : '')}
+            ${sel('', '')}
             ${sel('num', `${ro.n} item`)}
             ${sel('num', angka(ro.nilai))}
             ${sel('num fg-tagih', statusTagih(ro))}
@@ -158,6 +172,20 @@ function renderTabel() {
             </table>
           </div>
         </div>`;
+      }).join('');
+      return `
+        <div class="fg-fp ${bukaFp ? 'buka' : ''}" data-fp="${esc(f.key)}">
+          <div class="fg-op-head fg-fp-head" data-toggle-fp="${esc(f.key)}">
+            ${cek('fp', f.key, `Pilih FPPP ${f.fp}`)}
+            <div class="fg-judul">${SVG_PANAH}<b>${esc(f.fp)}</b></div>
+            ${sel('', `<span class="muted small">Selesai</span> ${tanggal(tglMaks(f.rows, 'tgl_fppp'))}`)}
+            ${sel('', `<span class="muted small">Tarik</span> ${tanggal(tglMaks(f.rows, 'tgl_tarik'))}`)}
+            ${sel('num', `${rf.n} item<div class="small muted">${f.ops.length} opening</div>`)}
+            ${sel('num', angka(rf.nilai))}
+            ${sel('num fg-tagih', statusTagih(rf))}
+          </div>
+          <div class="fg-fp-isi" ${bukaFp ? '' : 'hidden'}>${ops}</div>
+        </div>`;
     }).join('');
     return `
       <div class="fg-so ${bukaSo ? 'buka' : ''}" data-so="${esc(g.so)}">
@@ -167,11 +195,11 @@ function renderTabel() {
           ${sel('wrap', teks(g.info.customer))}
           ${sel('', teks(g.info.top))}
           ${sel('', daftarPi(g.info.proforma))}
-          ${sel('num', `${rg.n} item<div class="small muted">${g.ops.length} opening</div>`)}
+          ${sel('num', `${rg.n} item<div class="small muted">${g.fps.length} FPPP · ${g.nOp} opening</div>`)}
           ${sel('num', angka(rg.nilai))}
           ${sel('num fg-tagih', statusTagih(rg))}
         </div>
-        <div class="fg-so-isi" ${bukaSo ? '' : 'hidden'}>${ops}</div>
+        <div class="fg-so-isi" ${bukaSo ? '' : 'hidden'}>${fps}</div>
       </div>`;
   }).join('');
   $('tbl-fg').innerHTML = head + body;
@@ -182,7 +210,8 @@ function kunciGrup(tipe, key) {
   const rows = state.data.rows.filter(bisaDipilih);
   if (tipe === 'item') return rows.some(r => kunci(r) === key) ? [key] : [];
   if (tipe === 'so') return rows.filter(r => r.so_no === key).map(kunci);
-  if (tipe === 'op') return rows.filter(r => kunciOp(r.so_no, r.kode_opening || TANPA_OPENING) === key).map(kunci);
+  if (tipe === 'fp') return rows.filter(r => kunciFp(r) === key).map(kunci);
+  if (tipe === 'op') return rows.filter(r => kunciOpR(r) === key).map(kunci);
   return rows.map(kunci);
 }
 
@@ -495,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.closest('label.cek-area, input, a, button')) return;
     const so = e.target.closest('[data-toggle-so]');
     const op = e.target.closest('[data-toggle-op]');
+    const fp = e.target.closest('[data-toggle-fp]');
     const toggle = (set, key, wadah, isi) => {
       const buka = !set.has(key);
       if (buka) set.add(key); else set.delete(key);
@@ -502,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
       wadah.querySelector(isi).hidden = !buka;
     };
     if (op) { toggle(state.bukaOp, op.dataset.toggleOp, op.closest('.fg-op'), '.fg-op-isi'); return; }
+    if (fp) { toggle(state.bukaFp, fp.dataset.toggleFp, fp.closest('.fg-fp'), '.fg-fp-isi'); return; }
     if (so) toggle(state.bukaSo, so.dataset.toggleSo, so.closest('.fg-so'), '.fg-so-isi');
   });
 
