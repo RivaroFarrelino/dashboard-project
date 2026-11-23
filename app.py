@@ -695,18 +695,26 @@ def api_penagihan_hitung():
         "GROUP BY pi.nomor_so",
         [BRAND] + so_list + ["Down Payment", "%-DP%"],
     )}
-    sudah = {r["so_no"]: float(r["nominal"] or 0) for r in db.query(
-        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))) AS nominal "
+    sudah, item_sudah = {}, {}
+    for r in db.query(
+        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))) AS nominal, SUM(l.line_amount) AS nilai_item "
         "FROM app_fg_tagih t JOIN bc_sales_line l ON l.document_no = t.so_no AND l.line_no = t.line_no "
         "WHERE t.is_ticked = 1 AND t.so_no IN (" + tanda + ") GROUP BY t.so_no",
         so_list,
+    ):
+        sudah[r["so_no"]] = float(r["nominal"] or 0)
+        item_sudah[r["so_no"]] = float(r["nilai_item"] or 0)
+    cash = {r["so_no"]: float(r["paid"] or 0) for r in db.query(
+        "SELECT so_no, paid FROM app_calc_so WHERE so_no IN (" + tanda + ")", so_list,
     )}
     proforma = _proforma_so(so_list)
     hasil = []
     for so_no in so_list:
         h = header.get(so_no) or {}
         kontrak = float(h.get("kontrak") or 0)
-        sisa = float(max(0, round(kontrak - dp.get(so_no, 0) - sudah.get(so_no, 0))))
+        dp_so, sudah_so, cash_so = dp.get(so_no, 0), sudah.get(so_no, 0), cash.get(so_no, 0)
+        tertutup = max(cash_so, dp_so + sudah_so)
+        sisa = float(max(0, round(kontrak - tertutup)))
         items = [{"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"], "nama_item": b["nama_item"],
                   "kode_opening": b.get("kode_opening"), "kode_unit": b.get("kode_unit"),
                   "qty": b["qty"], "nilai": _nilai_item(b["line_amount"])}
@@ -714,9 +722,11 @@ def api_penagihan_hitung():
         subtotal = sum(it["nilai"] for it in items)
         dpp = _dpp(subtotal)
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
-                      "top": h.get("top"), "proforma": proforma.get(so_no, []), "kontrak": kontrak, "dp": dp.get(so_no, 0),
-                      "sudah_ditagih": sudah.get(so_no, 0), "sisa": sisa, "items": items,
-                      "subtotal": subtotal, "dpp": dpp, "ppn": subtotal - dpp, "total": min(subtotal, sisa)})
+                      "top": h.get("top"), "proforma": proforma.get(so_no, []), "kontrak": kontrak, "dp": dp_so,
+                      "cash_in": cash_so, "sudah_ditagih": sudah_so, "item_sebelum": item_sudah.get(so_no, 0),
+                      "tertutup": tertutup, "sisa": sisa, "items": items,
+                      "subtotal": subtotal, "dpp": dpp, "ppn": subtotal - dpp,
+                      "total": float(min(sisa, max(0, round(item_sudah.get(so_no, 0) + subtotal - tertutup))))})
     return jsonify(so=hasil, ppn=PPN)
 
 
