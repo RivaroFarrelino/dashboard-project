@@ -293,8 +293,8 @@ function renderKonfirmasi(data) {
         <div class="tagih-ringkas small">
           <span>Kontrak <b>${angka(so.kontrak)}</b></span>
           <span>DP terbayar <b>${angka(so.dp)}</b></span>
+          <span>Cash in <b>${angka(so.cash_in)}</b></span>
           <span>Sudah ditagih <b>${angka(so.sudah_ditagih)}</b></span>
-          <span>Sisa tagihan <b>${angka(so.sisa)}</b></span>
         </div>
       </div>
       <div class="table-wrap">
@@ -314,7 +314,9 @@ function renderKonfirmasi(data) {
             <tr><td colspan="5">DPP</td><td class="num">${angka(so.dpp)}</td></tr>
             <tr><td colspan="5">PPN ${fmtPersen.format(data.ppn * 100)}%</td><td class="num">${angka(so.ppn)}</td></tr>
             <tr><td colspan="5"><b>Subtotal</b></td><td class="num"><b>${angka(so.subtotal)}</b></td></tr>
-            <tr><td colspan="5"><b>Total</b></td><td class="num"><input class="input-nominal input-sub" data-tot inputmode="numeric" value="${fmtAngka.format(so.total)}" aria-label="Total ${esc(so.so_no)}"></td></tr>
+            <tr><td colspan="5">Item sudah ditagih</td><td class="num">${angka(so.item_sebelum)}</td></tr>
+            <tr><td colspan="5">Sudah tertutup</td><td class="num">${angka(-so.tertutup)}</td></tr>
+            <tr><td colspan="5"><b>Total</b>${Number(so.total) === 0 ? ' <span class="badge b-gray">Tertutup DP</span>' : ''}</td><td class="num"><input class="input-nominal input-sub" data-tot inputmode="numeric" value="${fmtAngka.format(so.total)}" aria-label="Total ${esc(so.so_no)}"></td></tr>
           </tfoot>
         </table>
       </div>
