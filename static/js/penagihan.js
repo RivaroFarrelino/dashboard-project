@@ -281,37 +281,30 @@ function tutupKonfirmasi(tersimpan) {
 }
 
 function totalSo(blok) {
-  return bacaAngka(blok.querySelector('input[data-tot]').value);
+  const dp = bacaAngka(blok.querySelector('input[data-dp]').value);
+  if (!Number.isFinite(dp) || dp < 0) return NaN;
+  return Math.max(0, Math.round(Number(blok.dataset.item) - dp));
 }
 
-function hitungTotalKonfirmasi(sumber) {
+function hitungTotalKonfirmasi() {
   const blok = [...document.querySelectorAll('#m-tagih-isi [data-so]')];
-  const totalInp = $('m-tagih-total');
-  if (sumber === totalInp && blok.length === 1) {
-    blok[0].querySelector('input[data-tot]').value = totalInp.value;
-  }
   let total = 0;
   let valid = true;
   blok.forEach(b => {
-    const inp = b.querySelector('input[data-tot]');
     const n = totalSo(b);
-    const salah = !Number.isFinite(n) || n < 0;
-    inp.classList.toggle('salah', salah);
+    const salah = !Number.isFinite(n);
+    b.querySelector('input[data-dp]').classList.toggle('salah', salah);
+    b.querySelector('[data-hasil]').textContent = salah ? STRIP : fmtAngka.format(n);
     if (salah) { valid = false; return; }
     total += n;
-    const warn = b.querySelector('[data-warn]');
-    const sisa = Number(b.dataset.sisa);
-    warn.hidden = n <= sisa + 1;
-    warn.textContent = `Melebihi sisa tagihan ${fmtAngka.format(sisa)}.`;
   });
-  if (sumber !== totalInp) totalInp.value = valid ? fmtAngka.format(Math.round(total)) : '';
-  totalInp.classList.toggle('salah', sumber === totalInp && !valid);
+  $('m-tagih-total').value = valid ? fmtAngka.format(total) : '';
   $('m-tagih-simpan').disabled = !valid;
 }
 
 function renderKonfirmasi(data) {
   $('m-tagih-isi').innerHTML = data.so.map(so => `
-    <div class="tagih-so" data-so="${esc(so.so_no)}" data-sisa="${Number(so.sisa)}">
+    <div class="tagih-so" data-so="${esc(so.so_no)}" data-item="${Number(so.subtotal)}">
       <div class="tagih-so-head">
         <div class="tagih-so-judul"><b>${esc(so.so_no)}</b>${so.project_code ? `<span class="muted">${esc(so.project_code)}</span>` : ''}</div>
         <dl class="tagih-meta">
@@ -339,18 +332,16 @@ function renderKonfirmasi(data) {
               <td class="num">${angka(it.nilai)}</td>
             </tr>`).join('')}
           </tbody>
-          <tfoot>
-            <tr><td colspan="5">DPP</td><td class="num">${angka(so.dpp)}</td></tr>
-            <tr><td colspan="5">PPN ${fmtPersen.format(data.ppn * 100)}%</td><td class="num">${angka(so.ppn)}</td></tr>
-            <tr><td colspan="5"><b>Subtotal</b></td><td class="num"><b>${angka(so.subtotal)}</b></td></tr>
-            <tr><td colspan="5">Potong DP</td><td class="num">${angka(-so.potong)}</td></tr>
-            <tr><td colspan="5"><b>Total</b></td><td class="num"><input class="input-nominal input-sub" data-tot inputmode="numeric" value="${fmtAngka.format(so.total)}" aria-label="Total ${esc(so.so_no)}"></td></tr>
-          </tfoot>
         </table>
       </div>
-      <div class="tagih-warn" data-warn hidden></div>
+      <div class="susun">
+        <div class="susun-baris"><span>Total item</span><b>${angka(so.subtotal)}</b></div>
+        <div class="susun-baris"><span>DP yang sudah</span><input class="input-nominal susun-input" data-dp inputmode="numeric" value="${fmtAngka.format(so.potong)}" aria-label="DP yang sudah ${esc(so.so_no)}"></div>
+        <div class="susun-garis"><span class="susun-op">−</span></div>
+        <div class="susun-baris susun-hasil"><span>Tagihan</span><b data-hasil></b></div>
+      </div>
     </div>`).join('');
-  $('m-tagih-total').readOnly = data.so.length > 1;
+  $('m-tagih-total').readOnly = true;
   hitungTotalKonfirmasi();
 }
 
@@ -485,11 +476,9 @@ document.addEventListener('DOMContentLoaded', () => {
   $('m-tagih').addEventListener('click', e => { if (e.target === $('m-tagih')) tutupKonfirmasi(false); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('m-tagih').hidden) tutupKonfirmasi(false); });
   $('m-tagih-simpan').addEventListener('click', simpanKonfirmasi);
-  $('m-tagih-isi').addEventListener('input', e => { if (e.target.matches('input[data-tot]')) hitungTotalKonfirmasi(e.target); });
-  $('m-tagih-total').addEventListener('input', e => hitungTotalKonfirmasi(e.target));
+  $('m-tagih-isi').addEventListener('input', e => { if (e.target.matches('input[data-dp]')) hitungTotalKonfirmasi(); });
   const rapikan = inp => { const n = bacaAngka(inp.value); if (Number.isFinite(n)) inp.value = fmtAngka.format(Math.round(n)); };
-  $('m-tagih-isi').addEventListener('focusout', e => { if (e.target.matches('input[data-tot]')) { rapikan(e.target); hitungTotalKonfirmasi(); } });
-  $('m-tagih-total').addEventListener('focusout', e => { if (!e.target.readOnly) { rapikan(e.target); hitungTotalKonfirmasi(e.target); } });
+  $('m-tagih-isi').addEventListener('focusout', e => { if (e.target.matches('input[data-dp]')) { rapikan(e.target); hitungTotalKonfirmasi(); } });
 
   document.querySelectorAll('[data-tutup-riwayat]').forEach(b => b.addEventListener('click', tutupRiwayat));
   $('m-riwayat').addEventListener('click', e => {
