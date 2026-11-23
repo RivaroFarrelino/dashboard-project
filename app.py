@@ -528,6 +528,7 @@ FROM_PENAGIHAN = (
     "LEFT JOIN app_calc_item_output o ON o.item_no = l.item_no "
     "LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
     "LEFT JOIN bc_item i ON i.no = l.item_no "
+    "LEFT JOIN app_fg_tarik tr ON tr.so_no = l.document_no AND tr.line_no = l.line_no "
     "JOIN " + FPPP_STAT + " ON f.so_no = l.document_no AND f.fk = " + FPPP_KODE + " "
 )
 FPPP_SIAP = "f.n_ok = f.n"
@@ -598,7 +599,7 @@ def api_penagihan():
         rows = db.query(
             "SELECT l.document_no AS so_no, l.line_no, l.item_no, l.description AS nama_item, l.quantity AS qty, "
             "l.line_amount AS nilai, " + FPPP_NO + " AS fppp_no, " + FPPP_KODE + " AS fppp_kode, o.prod_order_no, "
-            "o.qty_output, o.tgl_output, f.tgl AS tgl_fppp, i.kode_opening, i.kode_unit, "
+            "o.qty_output, o.tgl_output, f.tgl AS tgl_fppp, tr.tgl_tarik, i.kode_opening, i.kode_unit, "
             "h.external_document_no AS quo, h.project_code, h.project_name, "
             "h.sell_to_customer_name AS customer, h.payment_terms_code AS top, "
             "COALESCE(t.is_ticked, 0) AS is_ticked, t.nilai_tagih, t.updated_by, "
