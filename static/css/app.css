@@ -687,3 +687,13 @@ body.ada-aksi .pager { margin-bottom: 72px; }
 .riwayat-item > td { background: var(--surface-2); padding: 8px 12px; }
 .riwayat-item .tbl { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 @media (max-width: 860px) { .riwayat-ringkas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fg-fp { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.fg-fp + .fg-fp { margin-top: 8px; }
+.fg-fp.buka > .fg-fp-head { border-bottom: 1px solid var(--border); background: #fafbfd; }
+.fg-fp > .fg-fp-head .panah { transition: transform .15s; }
+.fg-fp.buka > .fg-fp-head .panah { transform: rotate(90deg); color: var(--text); }
+.fg-fp-isi { padding: 8px 10px 10px 34px; background: var(--surface-2); }
+.fg-fp-isi .fg-op { box-shadow: none; }
+.fg-unit { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fg-fp-head { grid-template-columns: 52px minmax(210px, 1.5fr) minmax(150px, 1fr) minmax(130px, 1fr) 100px 130px 120px; }
+.fg-fp-head .fg-judul b { white-space: nowrap; }
