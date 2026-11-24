@@ -1,3 +1,4 @@
+import json
 import logging
 import math
 import os
@@ -5,6 +6,7 @@ import re
 import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from urllib import error as urlerror, request as urlrequest
 
 from flask import Flask, g, jsonify, redirect, render_template, request
 from flask.json.provider import DefaultJSONProvider
@@ -41,6 +43,12 @@ app.teardown_appcontext(db.close_db)
 auth.init_app(app)
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("dashboard")
+N8N_PROFORMA_URL = os.environ.get("N8N_PROFORMA_URL", "").strip()
+N8N_PROFORMA_TOKEN = os.environ.get("N8N_PROFORMA_TOKEN", "").strip()
+PI_ITEM = "SALES-AST-PL"
+PI_LOKASI = "FG-AST"
+PI_JATUH_TEMPO = 30
+PI_TIPE = ("Phase", "Final")
 
 
 @app.errorhandler(Exception)
@@ -632,6 +640,125 @@ def _proforma_so(so_list):
     return hasil
 
 
+def _usul_proforma(so_list, baris_dipilih):
+    tanda = ", ".join(["%s"] * len(so_list))
+    info = {r["so_no"]: r for r in db.query(
+        "SELECT no AS so_no, sell_to_customer_no AS customer_no, external_document_no AS quo, project_code, "
+        "dim3_code, dim4_code, sales_dim5, pmsm_dim6, arsitek_dim7, kontraktor_dim8 "
+        "FROM bc_sales_header WHERE no IN (" + tanda + ")",
+        so_list,
+    )}
+    sisa_fg = {r["so_no"]: int(r["n"] or 0) for r in db.query(
+        "SELECT l.document_no AS so_no, COUNT(*) AS n FROM bc_sales_line l "
+        "LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no AND t.is_ticked = 1 "
+        "WHERE l.document_no IN (" + tanda + ") AND " + FG_COND + " AND t.so_no IS NULL GROUP BY l.document_no",
+        so_list + [BRAND],
+    )}
+    jml_pl = {r["so_no"]: int(r["n"] or 0) for r in db.query(
+        "SELECT x.so_no, COUNT(*) AS n FROM ("
+        "SELECT nomor_so AS so_no, no FROM bc_proforma_header WHERE nomor_so IN (" + tanda + ") "
+        "AND missing_in_bc_since IS NULL AND external_document_no LIKE %s "
+        "UNION SELECT so_no, pi_no FROM app_proforma WHERE so_no IN (" + tanda + ") AND status = 'DIBUAT'"
+        ") x GROUP BY x.so_no",
+        so_list + ["%-PL%"] + so_list,
+    )}
+    dipilih = {}
+    for b in baris_dipilih:
+        dipilih[b["so_no"]] = dipilih.get(b["so_no"], 0) + 1
+    hasil = {}
+    for so_no in so_list:
+        i = info.get(so_no) or {}
+        ke = jml_pl.get(so_no, 0) + 1
+        dasar = (i.get("quo") or so_no).strip()
+        hasil[so_no] = {
+            **i,
+            "ke": ke,
+            "ext_doc": f"{dasar}-PL.{ke}"[:50],
+            "tipe": "Final" if sisa_fg.get(so_no, 0) - dipilih.get(so_no, 0) <= 0 else "Phase",
+        }
+    return hasil
+
+
+def _panggil_n8n(isi):
+    if not N8N_PROFORMA_URL or not N8N_PROFORMA_TOKEN:
+        return {"ok": False, "pesan": "Pembuatan proforma belum diaktifkan."}
+    req = urlrequest.Request(
+        N8N_PROFORMA_URL,
+        data=json.dumps(isi, default=str).encode(),
+        headers={"Content-Type": "application/json", "X-Dashboard-Token": N8N_PROFORMA_TOKEN},
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=50) as r:
+            data = json.loads(r.read() or b"{}")
+    except urlerror.HTTPError as e:
+        try:
+            data = json.loads(e.read() or b"{}")
+        except ValueError:
+            data = {}
+        log.warning("n8n proforma HTTP %s: %s", e.code, str(data)[:300])
+        return {"ok": False, "pesan": (data.get("pesan") if isinstance(data, dict) else None) or "Proforma gagal diproses di BC."}
+    except Exception as e:
+        log.warning("n8n proforma gagal: %s", e)
+        return {"ok": False, "pesan": "Server n8n tidak merespons. Coba lagi."}
+    if not isinstance(data, dict):
+        return {"ok": False, "pesan": "Balasan n8n tidak dikenal."}
+    return data
+
+
+def _buat_proforma(so_no, usul, amount, tipe, batch, oleh):
+    posting = date.today()
+    jatuh = posting + timedelta(days=PI_JATUH_TEMPO)
+    work = f"PELUNASAN KE {usul['ke']}"
+    key = f"{batch}|{so_no}"
+    db.query(
+        "INSERT INTO app_proforma (batch, so_no, proforma_type, ext_doc, work_desc, posting_date, due_date, amount, status, created_by) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'PROSES', %s)",
+        (key, so_no, tipe, usul["ext_doc"], work, posting, jatuh, amount, oleh),
+    )
+    pf = db.query_one("SELECT id FROM app_proforma WHERE batch = %s", (key,))
+    hasil = _panggil_n8n({
+        "aksi": "buat",
+        "kunci": key,
+        "header": {
+            "Sell_to_Customer_No": usul.get("customer_no"),
+            "Nomor_SO": so_no,
+            "Proforma_Type": tipe,
+            "External_Document_No": usul["ext_doc"],
+            "WorkDescriptionTxt": work,
+            "Posting_Date": posting.isoformat(),
+            "Due_Date": jatuh.isoformat(),
+            "Location_Code": PI_LOKASI,
+            "Shortcut_Dimension_1_Code": BRAND,
+        },
+        "baris": {
+            "No": PI_ITEM,
+            "Description": f"ALUMINIUM DOOR & WINDOW {usul['ext_doc']}"[:100],
+            "Description_2": "PELUNASAN " + BRAND,
+            "Location_Code": PI_LOKASI,
+            "Quantity": 1,
+            "Unit_Price": amount,
+            "Shortcut_Dimension_2_Code": usul.get("project_code") or "",
+            "ShortcutDimCode3": usul.get("dim3_code") or "",
+            "ShortcutDimCode4": usul.get("dim4_code") or "",
+            "ShortcutDimCode5": usul.get("sales_dim5") or "",
+            "ShortcutDimCode6": usul.get("pmsm_dim6") or "",
+            "ShortcutDimCode7": usul.get("arsitek_dim7") or "",
+            "ShortcutDimCode8": usul.get("kontraktor_dim8") or "",
+        },
+    })
+    pi_no = str(hasil.get("pi_no") or "").strip()[:30]
+    if hasil.get("ok") and pi_no:
+        db.query("UPDATE app_proforma SET status = 'DIBUAT', pi_no = %s, pesan = NULL WHERE id = %s", (pi_no, pf["id"]))
+        db.query("INSERT INTO app_proforma_log (proforma_id, aksi, isi, oleh) VALUES (%s, 'BUAT', %s, %s)",
+                 (pf["id"], json.dumps({"amount": amount, "tipe": tipe}), oleh))
+        log.info("Proforma %s dibuat untuk %s oleh %s (%s)", pi_no, so_no, oleh, amount)
+        return {"ok": True, "pi_no": pi_no}
+    pesan = str(hasil.get("pesan") or "Proforma gagal dibuat di BC.")[:500]
+    db.query("UPDATE app_proforma SET status = 'GAGAL', pesan = %s WHERE id = %s", (pesan, pf["id"]))
+    return {"ok": False, "pesan": pesan}
+
+
 def _kunci_item(items):
     kunci, lihat = [], set()
     for it in (items or [])[:MAKS_ITEM_TAGIH]:
@@ -712,6 +839,7 @@ def api_penagihan_hitung():
         cash[r["so_no"]] = float(r["paid"] or 0)
         persen_dp[r["so_no"]] = float(r["persen_dp"] or 0)
     proforma = _proforma_so(so_list)
+    usul = _usul_proforma(so_list, baris)
     hasil = []
     for so_no in so_list:
         h = header.get(so_no) or {}
@@ -729,7 +857,8 @@ def api_penagihan_hitung():
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
                       "top": h.get("top"), "proforma": proforma.get(so_no, []), "kontrak": kontrak, "dp": dp_so,
                       "cash_in": cash_so, "persen_dp": pdp, "potong": potong, "sudah_ditagih": sudah_so,
-                      "sisa": sisa, "items": items, "subtotal": subtotal, "dpp": dpp, "ppn": subtotal - dpp,
+                      "sisa": sisa, "items": items, "subtotal": subtotal,
+                      "tipe_usul": usul[so_no]["tipe"], "ext_doc_usul": usul[so_no]["ext_doc"], "dpp": dpp, "ppn": subtotal - dpp,
                       "total": float(min(sisa, max(0, subtotal - potong)))})
     return jsonify(so=hasil, ppn=PPN)
 
@@ -744,6 +873,33 @@ def api_penagihan_tandai():
         return jsonify(pesan="Tidak ada item yang dipilih."), 400
     baris = _baris_tagih(kunci)
     ubah = [b for b in baris if bool(b["is_ticked"]) != tagih]
+    oleh = g.user["username"]
+    batch = datetime.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3)
+    buat_pi = tagih and bool(data.get("buat_pi"))
+    tipe_so = data.get("tipe") if isinstance(data.get("tipe"), dict) else {}
+    proforma, gagal = [], []
+    if buat_pi and ubah:
+        so_pi = list(dict.fromkeys(b["so_no"] for b in ubah))
+        if len(so_pi) > 5:
+            return jsonify(pesan="Buat proforma maksimal 5 SO sekaligus."), 400
+        total_so = data.get("total") if isinstance(data.get("total"), dict) else {}
+        usul = _usul_proforma(so_pi, ubah)
+        for so_no in so_pi:
+            try:
+                amount = float(math.floor(float(total_so[so_no]) + 0.5))
+            except (KeyError, TypeError, ValueError):
+                return jsonify(pesan="Total tagihan belum terkirim. Muat ulang halaman lalu coba lagi."), 400
+            if amount <= 0:
+                continue
+            tipe = tipe_so.get(so_no) if tipe_so.get(so_no) in PI_TIPE else usul[so_no]["tipe"]
+            hasil = _buat_proforma(so_no, usul[so_no], amount, tipe, batch, oleh)
+            if hasil["ok"]:
+                proforma.append({"so_no": so_no, "pi_no": hasil["pi_no"]})
+            else:
+                gagal.append({"so_no": so_no, "pesan": hasil["pesan"]})
+        if gagal:
+            batal = {x["so_no"] for x in gagal}
+            ubah = [b for b in ubah if b["so_no"] not in batal]
     nominal = {}
     if tagih:
         total_so = data.get("total") if isinstance(data.get("total"), dict) else {}
@@ -762,8 +918,6 @@ def api_penagihan_tandai():
                 bagian = sisa if i == len(item_so) - 1 else float(math.floor(total * (dpp[i] / jumlah if jumlah else 1 / len(item_so))))
                 nominal[(b["so_no"], b["line_no"])] = bagian
                 sisa -= bagian
-    oleh = g.user["username"]
-    batch = datetime.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3)
     if ubah:
         perintah = []
         for b in ubah:
@@ -784,7 +938,8 @@ def api_penagihan_tandai():
             ))
         db.transaksi(perintah)
         log.info("Penagihan FG: %s item di%s oleh %s", len(ubah), "tandai" if tagih else "batalkan", oleh)
-    return jsonify(diubah=len(ubah), oleh=oleh, nominal={f"{k[0]}|{k[1]}": v for k, v in nominal.items()})
+    return jsonify(diubah=len(ubah), oleh=oleh, nominal={f"{k[0]}|{k[1]}": v for k, v in nominal.items()},
+                   diubah_kunci=[f'{b["so_no"]}|{b["line_no"]}' for b in ubah], proforma=proforma, gagal=gagal)
 
 @app.get("/api/penagihan/riwayat/<so_no>")
 def api_penagihan_riwayat(so_no):
@@ -839,6 +994,139 @@ def api_penagihan_riwayat(so_no):
     ringkas = {**h, "dp": dp_so, "jml_item": aktif.get("jml") or 0, "nilai_item": aktif.get("nilai_item") or 0,
                "nominal": nominal, "tertutup": tertutup, "sisa": max(0.0, kontrak - tertutup)}
     return jsonify(ringkas=ringkas, riwayat=list(grup.values()))
+
+
+@app.get("/proforma-fg")
+def page_proforma():
+    return render_template("proforma.html", active="proforma")
+
+
+SQL_PROFORMA = (
+    "SELECT p.id, p.so_no, p.pi_no, p.proforma_type, p.ext_doc, p.work_desc, p.remarks, p.your_ref, "
+    "p.posting_date, p.due_date, p.amount, p.status, p.pesan, p.created_by, "
+    "DATE_FORMAT(p.created_at, '%%Y-%%m-%%d %%H:%%i') AS created_at, p.updated_by, "
+    "DATE_FORMAT(p.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at, "
+    "s.sell_to_customer_name AS customer, s.project_code, h.status_pi, h.doc_status, "
+    "COALESCE((SELECT SUM(c.amount) FROM bc_cashier_in_line c WHERE c.document_no = p.pi_no), 0) AS dibayar "
+    "FROM app_proforma p "
+    "LEFT JOIN bc_sales_header s ON s.no = p.so_no "
+    "LEFT JOIN bc_proforma_header h ON h.no = p.pi_no "
+)
+
+
+@app.get("/api/proforma")
+def api_proforma():
+    a = request.args
+    where, params = "WHERE 1 = 1 ", []
+    q = a.get("q", "").strip()[:100]
+    if q:
+        like = f"%{q}%"
+        where += "AND (p.pi_no LIKE %s OR p.so_no LIKE %s OR p.ext_doc LIKE %s OR s.sell_to_customer_name LIKE %s OR s.project_code LIKE %s) "
+        params += [like] * 5
+    status = a.get("status", "")
+    if status in ("DIBUAT", "GAGAL"):
+        where += "AND p.status = %s "
+        params.append(status)
+    try:
+        halaman = max(1, int(a.get("halaman", "1")))
+    except ValueError:
+        halaman = 1
+    ukuran = 50
+    total = db.query_one(
+        "SELECT COUNT(*) AS n FROM app_proforma p LEFT JOIN bc_sales_header s ON s.no = p.so_no " + where, params,
+    )["n"]
+    rows = db.query(
+        SQL_PROFORMA + where + "ORDER BY p.created_at DESC, p.id DESC LIMIT %s OFFSET %s",
+        params + [ukuran, (halaman - 1) * ukuran],
+    )
+    return jsonify(rows=rows, total=total, halaman=halaman, ukuran=ukuran)
+
+
+@app.get("/api/proforma/<int:pid>")
+def api_proforma_detail(pid):
+    row = db.query_one(SQL_PROFORMA + "WHERE p.id = %s", (pid,))
+    if not row:
+        return jsonify(pesan="Proforma tidak ditemukan."), 404
+    batch_tagih = (db.query_one("SELECT batch FROM app_proforma WHERE id = %s", (pid,)) or {}).get("batch", "").split("|")[0]
+    items = db.query(
+        "SELECT g.item_no, l.description AS nama_item, g.qty, l.line_amount, g.nilai, i.kode_opening, i.kode_unit "
+        "FROM app_fg_tagih_log g "
+        "LEFT JOIN bc_sales_line l ON l.document_no = g.so_no AND l.line_no = g.line_no "
+        "LEFT JOIN bc_item i ON i.no = g.item_no "
+        "WHERE g.batch = %s AND g.so_no = %s AND g.action = 'TICK' ORDER BY g.id",
+        (batch_tagih, row["so_no"]),
+    )
+    riwayat = db.query(
+        "SELECT aksi, isi, oleh, DATE_FORMAT(waktu, '%%Y-%%m-%%d %%H:%%i') AS waktu FROM app_proforma_log "
+        "WHERE proforma_id = %s ORDER BY id DESC LIMIT 50",
+        (pid,),
+    )
+    return jsonify(proforma=row, items=items, riwayat=riwayat)
+
+
+EDIT_PROFORMA = {
+    "work_desc": ("WorkDescriptionTxt", 2000),
+    "remarks": ("RemarksTxt", 2000),
+    "your_ref": ("Your_Reference", 35),
+    "ext_doc": ("External_Document_No", 35),
+}
+
+
+@app.post("/api/proforma/<int:pid>/ubah")
+def api_proforma_ubah(pid):
+    row = db.query_one("SELECT * FROM app_proforma WHERE id = %s", (pid,))
+    if not row or row["status"] != "DIBUAT" or not row["pi_no"]:
+        return jsonify(pesan="Proforma tidak bisa diubah."), 400
+    data = request.get_json(silent=True) or {}
+    header, kolom = {}, {}
+    for k, (bc, panjang) in EDIT_PROFORMA.items():
+        if k in data:
+            v = str(data.get(k) or "").strip()[:panjang]
+            header[bc] = v
+            kolom[k] = v
+    if "proforma_type" in data:
+        if data["proforma_type"] not in PI_TIPE:
+            return jsonify(pesan="Tipe proforma tidak dikenal."), 400
+        header["Proforma_Type"] = kolom["proforma_type"] = data["proforma_type"]
+    for k, bc in (("posting_date", "Posting_Date"), ("due_date", "Due_Date")):
+        if k in data:
+            try:
+                d = date.fromisoformat(str(data[k])[:10])
+            except ValueError:
+                return jsonify(pesan="Format tanggal tidak valid."), 400
+            header[bc] = d.isoformat()
+            kolom[k] = d
+    baris = {}
+    if "amount" in data:
+        try:
+            amount = float(math.floor(float(data["amount"]) + 0.5))
+        except (TypeError, ValueError):
+            return jsonify(pesan="Amount tidak valid."), 400
+        if amount <= 0 or amount > 1e13:
+            return jsonify(pesan="Amount harus lebih dari 0."), 400
+        baris["Unit_Price"] = amount
+        kolom["amount"] = amount
+    if not kolom:
+        return jsonify(pesan="Tidak ada perubahan."), 400
+    if "posting_date" in kolom or "due_date" in kolom:
+        ke_tgl = lambda v: v if isinstance(v, date) or v is None else date.fromisoformat(str(v)[:10])
+        pd_ = kolom.get("posting_date", ke_tgl(row["posting_date"]))
+        dd_ = kolom.get("due_date", ke_tgl(row["due_date"]))
+        if pd_ and dd_ and dd_ < pd_:
+            return jsonify(pesan="Due Date tidak boleh sebelum Posting Date."), 400
+    hasil = _panggil_n8n({"aksi": "ubah", "pi_no": row["pi_no"], "header": header, "baris": baris})
+    if not hasil.get("ok"):
+        return jsonify(pesan=str(hasil.get("pesan") or "Proforma gagal diubah di BC.")[:300]), 400
+    oleh = g.user["username"]
+    set_sql = ", ".join(f"{k} = %s" for k in kolom)
+    db.transaksi([
+        ("UPDATE app_proforma SET " + set_sql + ", updated_by = %s, updated_at = NOW() WHERE id = %s",
+         list(kolom.values()) + [oleh, pid]),
+        ("INSERT INTO app_proforma_log (proforma_id, aksi, isi, oleh) VALUES (%s, 'UBAH', %s, %s)",
+         (pid, json.dumps(kolom, default=str), oleh)),
+    ])
+    log.info("Proforma %s diubah oleh %s: %s", row["pi_no"], oleh, ", ".join(kolom))
+    return jsonify(ok=True)
 
 
 if __name__ == "__main__":
