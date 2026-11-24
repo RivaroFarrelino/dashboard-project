@@ -803,24 +803,15 @@ def _dpp(nilai):
     return float(math.floor(float(nilai or 0) / (1 + PPN) + 0.5))
 
 
-@app.post("/api/penagihan/hitung")
-def api_penagihan_hitung():
-    kunci = _kunci_item((request.get_json(silent=True) or {}).get("items"))
-    if not kunci:
-        return jsonify(pesan="Tidak ada item yang dipilih."), 400
-    baris = [b for b in _baris_tagih(kunci) if not b["is_ticked"]]
-    if not baris:
-        return jsonify(pesan="Semua item terpilih sudah ditandai ditagih."), 400
-    so_list = list(dict.fromkeys(b["so_no"] for b in baris))
+def _posisi_kontrak(so_list):
+    if not so_list:
+        return {}
     tanda = ", ".join(["%s"] * len(so_list))
     header = {r["so_no"]: r for r in db.query(
-        "SELECT no AS so_no, sell_to_customer_name AS customer, project_code, payment_terms_code AS top, "
-        "contract_amount AS kontrak, currency_code FROM bc_sales_header WHERE no IN (" + tanda + ")",
+        "SELECT no AS so_no, contract_amount AS kontrak, currency_code FROM bc_sales_header WHERE no IN (" + tanda + ")",
         so_list,
     )}
     kurs = _kurs_so([k for k, v in header.items() if _is_valas(v.get("currency_code"))])
-    for k, v in kurs.items():
-        header[k]["kontrak"] = float(header[k]["kontrak"] or 0) * v
     dp = {r["so_no"]: float(r["dp"] or 0) for r in db.query(
         "SELECT pi.nomor_so AS so_no, SUM(x.amount) AS dp FROM ("
         "SELECT document_no AS pi_no, amount FROM bc_cashier_in_line WHERE brand = %s "
@@ -832,43 +823,82 @@ def api_penagihan_hitung():
         "GROUP BY pi.nomor_so",
         [BRAND] + so_list + ["Down Payment", "%-DP%"],
     )}
-    sudah, item_sudah = {}, {}
-    for r in db.query(
-        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))) AS nominal, SUM(l.line_amount) AS nilai_item "
+    sudah = {r["so_no"]: float(r["nominal"] or 0) for r in db.query(
+        "SELECT t.so_no, SUM(COALESCE(t.nilai_tagih, ROUND(l.line_amount))) AS nominal "
         "FROM app_fg_tagih t JOIN bc_sales_line l ON l.document_no = t.so_no AND l.line_no = t.line_no "
         "WHERE t.is_ticked = 1 AND t.so_no IN (" + tanda + ") GROUP BY t.so_no",
         so_list,
-    ):
-        sudah[r["so_no"]] = float(r["nominal"] or 0)
-        item_sudah[r["so_no"]] = float(r["nilai_item"] or 0)
-    cash, persen_dp = {}, {}
+    )}
+    pi = {}
     for r in db.query(
-        "SELECT so_no, paid, persen_dp FROM app_calc_so WHERE so_no IN (" + tanda + ")", so_list,
+        "SELECT h.nomor_so AS so_no, h.is_batal, COALESCE(SUM(l.line_amount), 0) AS amt FROM bc_proforma_header h "
+        "LEFT JOIN bc_proforma_line l ON l.document_no = h.no "
+        "WHERE h.nomor_so IN (" + tanda + ") AND h.missing_in_bc_since IS NULL GROUP BY h.no, h.nomor_so, h.is_batal",
+        so_list,
     ):
-        cash[r["so_no"]] = float(r["paid"] or 0)
-        persen_dp[r["so_no"]] = float(r["persen_dp"] or 0)
+        amt = float(r["amt"] or 0)
+        if r["is_batal"] and amt >= 0:
+            continue
+        pi[r["so_no"]] = pi.get(r["so_no"], 0) + amt
+    for r in db.query(
+        "SELECT so_no, SUM(amount) AS amt FROM app_proforma WHERE so_no IN (" + tanda + ") AND status = 'DIBUAT' "
+        "AND pi_no NOT IN (SELECT no FROM bc_proforma_header WHERE missing_in_bc_since IS NULL) GROUP BY so_no",
+        so_list,
+    ):
+        pi[r["so_no"]] = pi.get(r["so_no"], 0) + float(r["amt"] or 0)
+    calc = {r["so_no"]: r for r in db.query(
+        "SELECT so_no, paid, persen_dp FROM app_calc_so WHERE so_no IN (" + tanda + ")", so_list,
+    )}
+    hasil = {}
+    for so_no in so_list:
+        k = kurs.get(so_no, 1)
+        kontrak = float((header.get(so_no) or {}).get("kontrak") or 0) * k
+        c = calc.get(so_no) or {}
+        cash = float(c.get("paid") or 0)
+        terpakai = max(cash, pi.get(so_no, 0) * k, dp.get(so_no, 0) + sudah.get(so_no, 0))
+        hasil[so_no] = {"kontrak": kontrak, "cash": cash, "persen_dp": float(c.get("persen_dp") or 0),
+                        "dp": dp.get(so_no, 0), "sudah": sudah.get(so_no, 0), "pi": pi.get(so_no, 0) * k,
+                        "sisa": float(max(0, round(kontrak - terpakai)))}
+    return hasil
+
+
+@app.post("/api/penagihan/hitung")
+def api_penagihan_hitung():
+    kunci = _kunci_item((request.get_json(silent=True) or {}).get("items"))
+    if not kunci:
+        return jsonify(pesan="Tidak ada item yang dipilih."), 400
+    baris = [b for b in _baris_tagih(kunci) if not b["is_ticked"]]
+    if not baris:
+        return jsonify(pesan="Semua item terpilih sudah ditandai ditagih."), 400
+    so_list = list(dict.fromkeys(b["so_no"] for b in baris))
+    tanda = ", ".join(["%s"] * len(so_list))
+    header = {r["so_no"]: r for r in db.query(
+        "SELECT no AS so_no, sell_to_customer_name AS customer, project_code, payment_terms_code AS top "
+        "FROM bc_sales_header WHERE no IN (" + tanda + ")",
+        so_list,
+    )}
+    posisi = _posisi_kontrak(so_list)
     proforma = _proforma_so(so_list)
     usul = _usul_proforma(so_list, baris)
     hasil = []
     for so_no in so_list:
         h = header.get(so_no) or {}
-        kontrak = float(h.get("kontrak") or 0)
-        dp_so, sudah_so, cash_so = dp.get(so_no, 0), sudah.get(so_no, 0), cash.get(so_no, 0)
-        pdp = persen_dp.get(so_no, 0)
-        potong = round(cash_so * pdp / 100)
-        sisa = float(max(0, round(kontrak - sudah_so)))
+        p = posisi.get(so_no) or {}
+        kontrak, dp_so, sudah_so, cash_so = p.get("kontrak", 0), p.get("dp", 0), p.get("sudah", 0), p.get("cash", 0)
+        pdp, sisa = p.get("persen_dp", 0), p.get("sisa", 0)
         items = [{"so_no": so_no, "line_no": b["line_no"], "item_no": b["item_no"], "nama_item": b["nama_item"],
                   "kode_opening": b.get("kode_opening"), "kode_unit": b.get("kode_unit"),
                   "qty": b["qty"], "nilai": _nilai_item(b["line_amount"])}
                  for b in baris if b["so_no"] == so_no]
         subtotal = sum(it["nilai"] for it in items)
+        potong = max(round(cash_so * pdp / 100), round(subtotal - sisa))
         dpp = _dpp(subtotal)
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
                       "top": h.get("top"), "proforma": proforma.get(so_no, []), "kontrak": kontrak, "dp": dp_so,
                       "cash_in": cash_so, "persen_dp": pdp, "potong": potong, "sudah_ditagih": sudah_so,
                       "sisa": sisa, "items": items, "subtotal": subtotal,
                       "tipe_usul": usul[so_no]["tipe"], "ext_doc_usul": usul[so_no]["ext_doc"], "dpp": dpp, "ppn": subtotal - dpp,
-                      "total": float(min(sisa, max(0, subtotal - potong)))})
+                      "total": float(max(0, subtotal - potong))})
     return jsonify(so=hasil, ppn=PPN)
 
 
@@ -887,6 +917,7 @@ def api_penagihan_tandai():
     buat_pi = tagih and bool(data.get("buat_pi"))
     tipe_so = data.get("tipe") if isinstance(data.get("tipe"), dict) else {}
     proforma, gagal = [], []
+    posisi = _posisi_kontrak(list(dict.fromkeys(b["so_no"] for b in ubah))) if tagih else {}
     if buat_pi and ubah:
         so_pi = list(dict.fromkeys(b["so_no"] for b in ubah))
         if len(so_pi) > 5:
@@ -900,6 +931,8 @@ def api_penagihan_tandai():
                 return jsonify(pesan="Total tagihan belum terkirim. Muat ulang halaman lalu coba lagi."), 400
             if amount <= 0:
                 continue
+            if amount > posisi.get(so_no, {}).get("sisa", 0) + 1:
+                return jsonify(pesan=f"Tagihan {so_no} melebihi sisa kontrak."), 400
             tipe = tipe_so.get(so_no) if tipe_so.get(so_no) in PI_TIPE else usul[so_no]["tipe"]
             hasil = _buat_proforma(so_no, usul[so_no], amount, tipe, batch, oleh)
             if hasil["ok"]:
@@ -919,6 +952,8 @@ def api_penagihan_tandai():
                 return jsonify(pesan="Total tagihan belum terkirim. Muat ulang halaman (Ctrl+Shift+R) lalu coba lagi."), 400
             if total < 0 or total > 1e13:
                 return jsonify(pesan="Total tagihan tidak boleh minus."), 400
+            if total > posisi.get(so_no, {}).get("sisa", 0) + 1:
+                return jsonify(pesan=f"Tagihan {so_no} melebihi sisa kontrak."), 400
             item_so = [b for b in ubah if b["so_no"] == so_no]
             dpp = [max(0.0, float(b["line_amount"] or 0)) for b in item_so]
             jumlah = sum(dpp)
