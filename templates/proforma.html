@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Riwayat Proforma</h1>
+    <p class="muted">Proforma yang dibuat dari Penagihan FG</p>
+  </div>
+</header>
+
+<section id="pesan" class="alert" hidden></section>
+
+<div class="filter-bar card">
+  <div class="search search-sm">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="f-cari" type="search" placeholder="Cari no PI, SO, project, customer, ext doc">
+  </div>
+  <div class="segmen" id="f-status" role="tablist">
+    <button data-v="" class="aktif">Semua</button>
+    <button data-v="DIBUAT">Dibuat</button>
+    <button data-v="GAGAL">Gagal</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h3 id="judul-tabel">Daftar proforma</h3>
+  </div>
+  <div class="table-wrap wrap-beku">
+    <table class="tbl tbl-pf" id="tbl-pf"></table>
+  </div>
+  <div class="pager">
+    <span class="muted small" id="info-halaman"></span>
+    <div class="toolbar">
+      <button class="btn-sm" id="btn-prev">‹ Sebelumnya</button>
+      <button class="btn-sm" id="btn-next">Berikutnya ›</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="m-pf" hidden>
+  <div class="modal-box modal-tagih" role="dialog" aria-modal="true" aria-labelledby="m-pf-judul">
+    <div class="modal-head">
+      <div>
+        <h3 id="m-pf-judul">Proforma</h3>
+        <div class="muted small" id="m-pf-sub"></div>
+      </div>
+      <button class="btn-icon" data-tutup-pf aria-label="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="modal-body" id="m-pf-isi"></div>
+    <div class="modal-foot" id="m-pf-foot" hidden>
+      <span class="muted small" id="m-pf-info"></span>
+      <div class="modal-aksi">
+        <button type="button" class="btn" data-tutup-pf>Tutup</button>
+        <button type="button" class="btn-utama btn-utama-auto" id="m-pf-simpan">Simpan ke BC</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/proforma.js', v=aset_v) }}"></script>
+{% endblock %}
