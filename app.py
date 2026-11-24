@@ -738,6 +738,7 @@ def _buat_proforma(so_no, usul, amount, tipe, batch, oleh):
             "Due_Date": jatuh.isoformat(),
             "Location_Code": PI_LOKASI,
             "Shortcut_Dimension_1_Code": BRAND,
+            "Shortcut_Dimension_2_Code": usul.get("project_code") or "",
         },
         "baris": {
             "No": PI_ITEM,
