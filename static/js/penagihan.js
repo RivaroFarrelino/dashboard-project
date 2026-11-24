@@ -287,7 +287,8 @@ function tutupKonfirmasi(tersimpan) {
 function totalSo(blok) {
   const dp = bacaAngka(blok.querySelector('input[data-dp]').value);
   if (!Number.isFinite(dp) || dp < 0) return NaN;
-  return Math.max(0, Math.round(Number(blok.dataset.item) - dp));
+  const n = Math.max(0, Math.round(Number(blok.dataset.item) - dp));
+  return n > Number(blok.dataset.sisa) + 1 ? NaN : n;
 }
 
 function hitungTotalKonfirmasi() {
@@ -309,7 +310,7 @@ function hitungTotalKonfirmasi() {
 
 function renderKonfirmasi(data) {
   $('m-tagih-isi').innerHTML = data.so.map(so => `
-    <div class="tagih-so" data-so="${esc(so.so_no)}" data-item="${Number(so.subtotal)}">
+    <div class="tagih-so" data-so="${esc(so.so_no)}" data-item="${Number(so.subtotal)}" data-sisa="${Number(so.sisa)}">
       <div class="tagih-so-head">
         <div class="tagih-so-judul"><b>${esc(so.so_no)}</b>${so.project_code ? `<span class="muted">${esc(so.project_code)}</span>` : ''}
           <label class="tagih-tipe"><span class="muted small">Tipe</span><select data-tipe>${['Phase', 'Final'].map(t => `<option ${t === so.tipe_usul ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -324,6 +325,7 @@ function renderKonfirmasi(data) {
           <span>Cash in <b>${angka(so.cash_in)}</b></span>
           <span>DP TOP <b>${fmtPersen.format(Number(so.persen_dp || 0))}%</b></span>
           <span>Sudah ditagih <b>${angka(so.sudah_ditagih)}</b></span>
+          <span>Sisa kontrak <b>${angka(so.sisa)}</b></span>
         </div>
       </div>
       <div class="table-wrap">
@@ -392,7 +394,8 @@ async function simpanKonfirmasi(buatPi) {
     const pi = (hasil.proforma || []).map(p => p.pi_no);
     const gagal = hasil.gagal || [];
     if (gagal.length) {
-      $('m-tagih-isi').insertAdjacentHTML('afterbegin', `<div class="alert">${gagal.map(x => `${esc(x.so_no)}: ${esc(x.pesan)}`).join('<br>')}</div>`);
+      $('m-tagih-isi').querySelectorAll('.alert-tagih').forEach(x => x.remove());
+      $('m-tagih-isi').insertAdjacentHTML('afterbegin', `<div class="alert alert-tagih">${gagal.map(x => `${esc(x.so_no)}: ${esc(x.pesan)}`).join('<br>')}</div>`);
       if (pi.length) toast(`Proforma dibuat: ${pi.join(', ')}`);
       renderTabel();
       return;
