@@ -335,9 +335,10 @@ function renderKonfirmasi(data) {
         </table>
       </div>
       <div class="susun">
-        <div class="susun-baris"><span>Total item</span><b>${angka(so.subtotal)}</b></div>
-        <div class="susun-sub">DPP ${angka(so.dpp)} · PPN ${fmtPersen.format(data.ppn * 100)}% ${angka(so.ppn)}</div>
-        <div class="susun-baris"><span>DP yang sudah</span><input class="input-nominal susun-input" data-dp inputmode="numeric" value="${fmtAngka.format(so.potong)}" aria-label="DP yang sudah ${esc(so.so_no)}"></div>
+        <div class="susun-rinci"><span>DPP</span><span>${angka(so.dpp)}</span></div>
+        <div class="susun-rinci"><span>PPN ${fmtPersen.format(data.ppn * 100)}%</span><span>${angka(so.ppn)}</span></div>
+        <div class="susun-baris susun-total"><span>Total item</span><b>${angka(so.subtotal)}</b></div>
+        <div class="susun-baris"><span>Alokasi DP</span><input class="input-nominal susun-input" data-dp inputmode="numeric" value="${fmtAngka.format(so.potong)}" aria-label="Alokasi DP ${esc(so.so_no)}"></div>
         <div class="susun-garis"><span class="susun-op">−</span></div>
         <div class="susun-baris susun-hasil"><span>Tagihan</span><b data-hasil></b></div>
       </div>
