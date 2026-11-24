@@ -242,9 +242,13 @@ function barisDariKunci(k) {
   return state.data.rows.find(r => kunci(r) === k);
 }
 
-async function simpan(rows, tagih, total = {}) {
+async function simpan(rows, tagih, total = {}, opsi = {}) {
   const items = rows.map(r => ({ so_no: r.so_no, line_no: r.line_no }));
-  const hasil = await kirimJson('/api/penagihan/tandai', { items, tagih, total });
+  const hasil = await kirimJson('/api/penagihan/tandai', { items, tagih, total, ...opsi });
+  if (hasil.diubah_kunci) {
+    const jadi = new Set(hasil.diubah_kunci);
+    rows = rows.filter(r => jadi.has(kunci(r)));
+  }
   const sekarang = new Date();
   const waktu = `${sekarang.getFullYear()}-${String(sekarang.getMonth() + 1).padStart(2, '0')}-${String(sekarang.getDate()).padStart(2, '0')} ${String(sekarang.getHours()).padStart(2, '0')}:${String(sekarang.getMinutes()).padStart(2, '0')}`;
   const ringkasData = state.data.ringkas;
@@ -300,13 +304,16 @@ function hitungTotalKonfirmasi() {
   });
   $('m-tagih-total').value = valid ? fmtAngka.format(total) : '';
   $('m-tagih-simpan').disabled = !valid;
+  $('m-tagih-tanpa').disabled = !valid;
 }
 
 function renderKonfirmasi(data) {
   $('m-tagih-isi').innerHTML = data.so.map(so => `
     <div class="tagih-so" data-so="${esc(so.so_no)}" data-item="${Number(so.subtotal)}">
       <div class="tagih-so-head">
-        <div class="tagih-so-judul"><b>${esc(so.so_no)}</b>${so.project_code ? `<span class="muted">${esc(so.project_code)}</span>` : ''}</div>
+        <div class="tagih-so-judul"><b>${esc(so.so_no)}</b>${so.project_code ? `<span class="muted">${esc(so.project_code)}</span>` : ''}
+          <label class="tagih-tipe"><span class="muted small">Tipe</span><select data-tipe>${['Phase', 'Final'].map(t => `<option ${t === so.tipe_usul ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <span class="muted small">${esc(so.ext_doc_usul || '')}</span></div>
         <dl class="tagih-meta">
           <div><dt>Customer</dt><dd>${teks(so.customer)}</dd></div>
           <div><dt>TOP</dt><dd>${teks(so.top)}</dd></div>
@@ -352,6 +359,7 @@ async function bukaKonfirmasi(rows) {
   $('m-tagih-isi').innerHTML = '<div class="loading">Menghitung nominal…</div>';
   $('m-tagih-total').value = '';
   $('m-tagih-simpan').disabled = true;
+  $('m-tagih-tanpa').disabled = true;
   $('m-tagih').hidden = false;
   document.body.style.overflow = 'hidden';
   const tunggu = new Promise(res => { konfirmasi.selesai = res; });
@@ -365,20 +373,37 @@ async function bukaKonfirmasi(rows) {
   return tunggu;
 }
 
-async function simpanKonfirmasi() {
+async function simpanKonfirmasi(buatPi) {
   const total = {};
-  document.querySelectorAll('#m-tagih-isi [data-so]').forEach(b => { total[b.dataset.so] = Math.round(totalSo(b)); });
+  const tipe = {};
+  document.querySelectorAll('#m-tagih-isi [data-so]').forEach(b => {
+    total[b.dataset.so] = Math.round(totalSo(b));
+    const sel = b.querySelector('select[data-tipe]');
+    if (sel) tipe[b.dataset.so] = sel.value;
+  });
   const kunciItem = new Set(konfirmasi.data.so.flatMap(so => so.items.map(it => `${it.so_no}|${it.line_no}`)));
   const rows = konfirmasi.rows.filter(r => kunciItem.has(kunci(r)));
-  const tombol = $('m-tagih-simpan');
-  tombol.disabled = true;
+  const tombol = [$('m-tagih-simpan'), $('m-tagih-tanpa')];
+  const label = $('m-tagih-simpan').textContent;
+  tombol.forEach(t => { t.disabled = true; });
+  if (buatPi) $('m-tagih-simpan').textContent = 'Membuat proforma…';
   try {
-    await simpan(rows, true, total);
-    toast(`${rows.length} item ditandai ditagih.`);
+    const hasil = await simpan(rows, true, total, buatPi ? { buat_pi: true, tipe } : {});
+    const pi = (hasil.proforma || []).map(p => p.pi_no);
+    const gagal = hasil.gagal || [];
+    if (gagal.length) {
+      $('m-tagih-isi').insertAdjacentHTML('afterbegin', `<div class="alert">${gagal.map(x => `${esc(x.so_no)}: ${esc(x.pesan)}`).join('<br>')}</div>`);
+      if (pi.length) toast(`Proforma dibuat: ${pi.join(', ')}`);
+      renderTabel();
+      return;
+    }
+    toast(pi.length ? `Proforma dibuat: ${pi.join(', ')}` : `${hasil.diubah} item ditandai ditagih.`);
     tutupKonfirmasi(true);
   } catch (e) {
     toast(e.message);
-    tombol.disabled = false;
+  } finally {
+    $('m-tagih-simpan').textContent = label;
+    tombol.forEach(t => { t.disabled = false; });
   }
 }
 
@@ -477,7 +502,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-tutup-tagih]').forEach(b => b.addEventListener('click', () => tutupKonfirmasi(false)));
   $('m-tagih').addEventListener('click', e => { if (e.target === $('m-tagih')) tutupKonfirmasi(false); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('m-tagih').hidden) tutupKonfirmasi(false); });
-  $('m-tagih-simpan').addEventListener('click', simpanKonfirmasi);
+  $('m-tagih-simpan').addEventListener('click', () => simpanKonfirmasi(true));
+  $('m-tagih-tanpa').addEventListener('click', () => simpanKonfirmasi(false));
   $('m-tagih-isi').addEventListener('input', e => { if (e.target.matches('input[data-dp]')) hitungTotalKonfirmasi(); });
   const rapikan = inp => { const n = bacaAngka(inp.value); if (Number.isFinite(n)) inp.value = fmtAngka.format(Math.round(n)); };
   $('m-tagih-isi').addEventListener('focusout', e => { if (e.target.matches('input[data-dp]')) { rapikan(e.target); hitungTotalKonfirmasi(); } });
