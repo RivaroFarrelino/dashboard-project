@@ -685,19 +685,27 @@ def _panggil_n8n(isi):
     req = urlrequest.Request(
         N8N_PROFORMA_URL,
         data=json.dumps(isi, default=str).encode(),
-        headers={"Content-Type": "application/json", "X-Dashboard-Token": N8N_PROFORMA_TOKEN},
+        headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "DashboardProject/1.0", "X-Dashboard-Token": N8N_PROFORMA_TOKEN},
         method="POST",
     )
     try:
         with urlrequest.urlopen(req, timeout=50) as r:
             data = json.loads(r.read() or b"{}")
     except urlerror.HTTPError as e:
+        mentah = e.read() or b""
         try:
-            data = json.loads(e.read() or b"{}")
+            data = json.loads(mentah or b"{}")
         except ValueError:
             data = {}
-        log.warning("n8n proforma HTTP %s: %s", e.code, str(data)[:300])
-        return {"ok": False, "pesan": (data.get("pesan") if isinstance(data, dict) else None) or "Proforma gagal diproses di BC."}
+        log.warning("n8n proforma HTTP %s server=%s: %s", e.code, e.headers.get("Server", "-"), mentah[:200].decode(errors="replace"))
+        pesan = data.get("pesan") if isinstance(data, dict) else None
+        if not pesan:
+            pesan = {
+                401: "Token n8n tidak cocok. Cek credential Dashboard Proforma Token dan env N8N_PROFORMA_TOKEN.",
+                403: "Token n8n tidak cocok. Cek credential Dashboard Proforma Token dan env N8N_PROFORMA_TOKEN.",
+                404: "Webhook n8n tidak ditemukan. Pastikan workflow Buat Proforma Dashboard aktif dan URL production benar.",
+            }.get(e.code, f"Workflow n8n error ({e.code}). Cek Executions di n8n.")
+        return {"ok": False, "pesan": pesan}
     except Exception as e:
         log.warning("n8n proforma gagal: %s", e)
         return {"ok": False, "pesan": "Server n8n tidak merespons. Coba lagi."}
