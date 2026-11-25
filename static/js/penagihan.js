@@ -304,7 +304,7 @@ function hitungTotalKonfirmasi() {
     total += n;
   });
   $('m-tagih-total').value = valid ? fmtAngka.format(total) : '';
-  $('m-tagih-simpan').disabled = !valid;
+  $('m-tagih-simpan').disabled = !valid || total <= 0;
   $('m-tagih-tanpa').disabled = !valid;
 }
 
@@ -322,6 +322,7 @@ function renderKonfirmasi(data) {
         </dl>
         <div class="tagih-ringkas small">
           <span>Kontrak <b>${angka(so.kontrak)}</b></span>
+          <span>Proforma <b>${angka(so.total_pi)}</b></span>
           <span>Cash in <b>${angka(so.cash_in)}</b></span>
           <span>DP TOP <b>${fmtPersen.format(Number(so.persen_dp || 0))}%</b></span>
           <span>Sudah ditagih <b>${angka(so.sudah_ditagih)}</b></span>
@@ -407,6 +408,7 @@ async function simpanKonfirmasi(buatPi) {
   } finally {
     $('m-tagih-simpan').textContent = label;
     tombol.forEach(t => { t.disabled = false; });
+    hitungTotalKonfirmasi();
   }
 }
 
