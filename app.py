@@ -895,7 +895,7 @@ def api_penagihan_hitung():
         dpp = _dpp(subtotal)
         hasil.append({"so_no": so_no, "customer": h.get("customer"), "project_code": h.get("project_code"),
                       "top": h.get("top"), "proforma": proforma.get(so_no, []), "kontrak": kontrak, "dp": dp_so,
-                      "cash_in": cash_so, "persen_dp": pdp, "potong": potong, "sudah_ditagih": sudah_so,
+                      "cash_in": cash_so, "persen_dp": pdp, "potong": potong, "sudah_ditagih": sudah_so, "total_pi": p.get("pi", 0),
                       "sisa": sisa, "items": items, "subtotal": subtotal,
                       "tipe_usul": usul[so_no]["tipe"], "ext_doc_usul": usul[so_no]["ext_doc"], "dpp": dpp, "ppn": subtotal - dpp,
                       "total": float(max(0, subtotal - potong))})
