@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const TIPE_PI = ['Phase', 'Final'];
-const state = { status: '', halaman: 1, data: null, urut: 0, aktif: null };
+const state = { halaman: 1, data: null, urut: 0, aktif: null };
 
 function tampilPesan(t) {
   $('pesan').textContent = t;
@@ -22,7 +22,7 @@ const waktu = v => (v ? `${tanggal(v)} ${esc(String(v).slice(11, 16))}` : STRIP)
 
 async function muat() {
   const no = ++state.urut;
-  const p = new URLSearchParams({ q: $('f-cari').value.trim(), status: state.status, halaman: state.halaman });
+  const p = new URLSearchParams({ q: $('f-cari').value.trim(), halaman: state.halaman });
   tampilPesan('');
   $('tbl-pf').innerHTML = '<tbody><tr><td class="loading">Memuat proforma…</td></tr></tbody>';
   try {
@@ -49,14 +49,13 @@ function render() {
   }
   $('tbl-pf').innerHTML = `
     <thead><tr>
-      <th>Dibuat</th><th>No PI</th><th>Status</th><th>SO</th><th>Customer</th><th>Tipe</th><th>Ext Doc No</th>
+      <th>Dibuat</th><th>No PI</th><th>SO</th><th>Customer</th><th>Tipe</th><th>Ext Doc No</th>
       <th>Posting Date</th><th>Due Date</th><th class="num">Amount</th><th class="num">Dibayar</th><th>Status PI</th><th>Oleh</th>
     </tr></thead>
     <tbody>${rows.map(r => `
       <tr class="baris-pf" data-id="${r.id}" tabindex="0">
         <td>${waktu(r.created_at)}</td>
         <td><b>${teks(r.pi_no)}</b></td>
-        <td>${badge(r.status)}</td>
         <td>${teks(r.so_no)}</td>
         <td class="wrap">${teks(r.customer)}</td>
         <td>${teks(r.proforma_type)}</td>
@@ -173,14 +172,6 @@ function tutup() {
 document.addEventListener('DOMContentLoaded', () => {
   let t = null;
   $('f-cari').addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { state.halaman = 1; muat(); }, 350); });
-  $('f-status').addEventListener('click', e => {
-    const b = e.target.closest('button[data-v]');
-    if (!b) return;
-    document.querySelectorAll('#f-status button').forEach(x => x.classList.toggle('aktif', x === b));
-    state.status = b.dataset.v;
-    state.halaman = 1;
-    muat();
-  });
   $('btn-prev').addEventListener('click', () => { state.halaman -= 1; muat(); });
   $('btn-next').addEventListener('click', () => { state.halaman += 1; muat(); });
   $('tbl-pf').addEventListener('click', e => { const tr = e.target.closest('tr[data-id]'); if (tr) bukaDetail(tr.dataset.id); });
