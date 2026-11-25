@@ -118,6 +118,11 @@ function renderTabel() {
   $('btn-next').disabled = halaman * ukuran >= total;
   updatePilih();
   if (!grup.length) {
+    if (total > 0) {
+      if (state.halaman > 1 && (state.halaman - 1) * ukuran >= total) state.halaman -= 1;
+      muat();
+      return;
+    }
     $('tbl-fg').innerHTML = '<div class="loading">Tidak ada FG untuk filter ini.</div>';
     return;
   }
@@ -264,6 +269,13 @@ async function simpan(rows, tagih, total = {}, opsi = {}) {
     ringkasData.nilai_tagih = Number(ringkasData.nilai_tagih) + arah * Number(r.nilai);
     ringkasData.nominal_tagih = Number(ringkasData.nominal_tagih || 0) + arah * nilaiTagih;
   });
+  if ((tagih && state.status === 'belum') || (!tagih && state.status === 'sudah')) {
+    const soAwal = new Set(state.data.rows.map(r => r.so_no)).size;
+    state.data.rows = state.data.rows.filter(r => Boolean(r.is_ticked) !== tagih);
+    const soAkhir = new Set(state.data.rows.map(r => r.so_no)).size;
+    state.data.total = Math.max(0, Number(state.data.total || 0) - (soAwal - soAkhir));
+    rows.forEach(r => state.pilih.delete(kunci(r)));
+  }
   renderRingkas();
   return hasil;
 }
