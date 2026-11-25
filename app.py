@@ -1061,16 +1061,12 @@ SQL_PROFORMA = (
 @app.get("/api/proforma")
 def api_proforma():
     a = request.args
-    where, params = "WHERE 1 = 1 ", []
+    where, params = "WHERE p.status = 'DIBUAT' AND p.pi_no IS NOT NULL ", []
     q = a.get("q", "").strip()[:100]
     if q:
         like = f"%{q}%"
         where += "AND (p.pi_no LIKE %s OR p.so_no LIKE %s OR p.ext_doc LIKE %s OR s.sell_to_customer_name LIKE %s OR s.project_code LIKE %s) "
         params += [like] * 5
-    status = a.get("status", "")
-    if status in ("DIBUAT", "GAGAL"):
-        where += "AND p.status = %s "
-        params.append(status)
     try:
         halaman = max(1, int(a.get("halaman", "1")))
     except ValueError:
