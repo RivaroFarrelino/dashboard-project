@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaFp: new Set(), bukaOp: new Set() };
+const state = { kunciBanding: null, status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaFp: new Set(), bukaOp: new Set() };
 
 const kunci = r => `${r.so_no}|${r.line_no}`;
 
@@ -37,6 +37,7 @@ async function muat() {
     }
     renderRingkas();
     renderTabel();
+    muatBanding();
   } catch (e) {
     if (no !== state.urut) return;
     tampilPesan(e.message);
@@ -55,6 +56,32 @@ function renderRingkas() {
   $('k-tagih-bar').style.width = `${jml ? Math.min(100, jt / jml * 100) : 0}%`;
   $('k-belum').textContent = fmtAngka.format(jml - jt);
   $('k-belum-sub').innerHTML = `Nilai ${ringkas(nilai - nt)}`;
+}
+
+async function muatBanding(paksa = false) {
+  const params = new URLSearchParams({ q: $('f-cari').value.trim(), periode: $('f-periode').value });
+  const kunciBanding = params.toString();
+  if (!paksa && kunciBanding === state.kunciBanding) return;
+  state.kunciBanding = kunciBanding;
+  try {
+    const r = await ambilJson(`/api/penagihan/banding?${params}`);
+    if (kunciBanding !== state.kunciBanding) return;
+    const nilai = Number(r.nilai || 0), pi = Number(r.nilai_pi || 0);
+    const pct = nilai ? pi / nilai * 100 : 0;
+    $('k-pf').textContent = persen(pct);
+    $('k-pf-bar').style.width = `${Math.min(100, pct)}%`;
+    $('k-pf-rinci').innerHTML = `
+      <dt>FG jadi</dt><dd><b>${ringkas(nilai)}</b></dd>
+      <dt></dt><dd>${fmtAngka.format(Number(r.jml || 0))} item · ${fmtAngka.format(Number(r.jml_fppp || 0))} FPPP</dd>
+      <dt>Sudah di-PI</dt><dd><b>${ringkas(pi)}</b></dd>
+      <dt>Belum di-PI</dt><dd><b>${ringkas(Math.max(0, nilai - pi))}</b></dd>
+      <dt>Item ditagih</dt><dd>${fmtAngka.format(Number(r.jml_tagih || 0))} / ${fmtAngka.format(Number(r.jml || 0))} item</dd>`;
+  } catch (e) {
+    if (kunciBanding !== state.kunciBanding) return;
+    state.kunciBanding = null;
+    $('k-pf').textContent = '–';
+    $('k-pf-rinci').innerHTML = '';
+  }
 }
 
 function daftarPi(list) {
@@ -410,9 +437,11 @@ async function simpanKonfirmasi(buatPi) {
       $('m-tagih-isi').querySelectorAll('.alert-tagih').forEach(x => x.remove());
       $('m-tagih-isi').insertAdjacentHTML('afterbegin', `<div class="alert alert-tagih">${gagal.map(x => `${esc(x.so_no)}: ${esc(x.pesan)}`).join('<br>')}</div>`);
       if (pi.length) toast(`Proforma dibuat: ${pi.join(', ')}`);
+      muatBanding(true);
       renderTabel();
       return;
     }
+    muatBanding(true);
     toast(pi.length ? `Proforma dibuat: ${pi.join(', ')}` : `${hasil.diubah} item ditandai ditagih.`);
     tutupKonfirmasi(true);
   } catch (e) {
@@ -492,6 +521,7 @@ async function aksiMassal(tagih) {
   if (!confirm(`Batalkan tagih untuk ${rows.length} item (nominal ${fmtAngka.format(total)})?`)) return;
   try {
     await simpan(rows, false);
+    muatBanding(true);
     toast(`${rows.length} item dibatalkan.`);
     state.pilih.clear();
     renderTabel();
