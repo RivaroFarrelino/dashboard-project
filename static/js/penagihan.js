@@ -210,7 +210,7 @@ function renderTabel() {
           <div class="fg-op-head fg-fp-head" data-toggle-fp="${esc(f.key)}">
             ${cek('fp', f.key, `Pilih FPPP ${f.fp}`)}
             <div class="fg-judul">${SVG_PANAH}<b>${esc(f.fp)}</b></div>
-            ${sel('', `<span class="muted small">Selesai</span> ${tanggal(tglMaks(f.rows, 'tgl_fppp'))}`)}
+            ${sel('', `<span class="muted small">Output</span> ${tanggal(tglMaks(f.rows, 'tgl_fppp'))}`)}
             ${sel('', `<span class="muted small">Tarik</span> ${tanggal(tglMaks(f.rows, 'tgl_tarik'))}`)}
             ${sel('num', `${rf.n} item<div class="small muted">${f.ops.length} opening</div>`)}
             ${sel('num', angka(rf.nilai))}
