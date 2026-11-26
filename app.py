@@ -626,6 +626,39 @@ def api_penagihan():
     return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN_SO, rows=rows)
 
 
+SQL_PI_SO = (
+    "SELECT so_no, SUM(amt) AS amt FROM ("
+    "SELECT h.nomor_so AS so_no, COALESCE(SUM(pl.line_amount), 0) AS amt, MAX(h.is_batal) AS batal "
+    "FROM bc_proforma_header h LEFT JOIN bc_proforma_line pl ON pl.document_no = h.no "
+    "WHERE h.missing_in_bc_since IS NULL GROUP BY h.no, h.nomor_so "
+    "UNION ALL SELECT so_no, amount, 0 FROM app_proforma WHERE status = 'DIBUAT' "
+    "AND pi_no NOT IN (SELECT no FROM bc_proforma_header WHERE missing_in_bc_since IS NULL)"
+    ") x WHERE NOT (x.batal = 1 AND x.amt >= 0) GROUP BY so_no"
+)
+
+
+@app.get("/api/penagihan/banding")
+def api_penagihan_banding():
+    where, params = _filter_penagihan(request.args)
+    awal = "WHERE " + FG_COND + " "
+    syarat = "(1 = 1 " + where[len(awal):] + ")"
+    ekstra = params[2:]
+    r = db.query_one(
+        "SELECT COUNT(*) AS jml_so, COALESCE(SUM(fg.jml), 0) AS jml, COALESCE(SUM(fg.jml_tagih), 0) AS jml_tagih, "
+        "COALESCE(SUM(fg.n_fppp), 0) AS jml_fppp, COALESCE(SUM(fg.nilai), 0) AS nilai, "
+        "COALESCE(SUM(LEAST(fg.nilai, GREATEST(0, COALESCE(pi.amt, 0) - (fg.nilai_semua - fg.nilai)))), 0) AS nilai_pi "
+        "FROM (SELECT l.document_no AS so_no, SUM(l.line_amount) AS nilai_semua, "
+        "SUM(IF(" + syarat + ", l.line_amount, 0)) AS nilai, SUM(" + syarat + ") AS jml, "
+        "SUM(" + syarat + " AND t.is_ticked = 1) AS jml_tagih, "
+        "COUNT(DISTINCT IF(" + syarat + ", " + FPPP_KODE + ", NULL)) AS n_fppp "
+        + FROM_PENAGIHAN + awal + FILTER_STATUS["semua"] +
+        "GROUP BY l.document_no HAVING jml > 0) fg "
+        "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = fg.so_no",
+        ekstra * 4 + [BRAND, BRAND],
+    )
+    return jsonify(r)
+
+
 def _proforma_so(so_list):
     if not so_list:
         return {}
