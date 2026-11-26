@@ -255,6 +255,13 @@ tr.redup td { color: var(--muted); }
 .select-wrap.inline { flex-direction: row; align-items: center; gap: 8px; }
 .select-wrap.inline select { height: 34px; min-width: 170px; font-size: 13px; }
 .kpi-grid.kpi-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
+.kpi-grid.kpi-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.kpi-rinci { margin: 10px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; }
+.kpi-rinci dt { color: var(--muted); }
+.kpi-rinci dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.kpi-rinci dd b { font-weight: 600; }
+@media (max-width: 1280px) { .kpi-grid.kpi-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .kpi-grid.kpi-4 { grid-template-columns: 1fr; } }
 .tbl th.cek, .tbl td.cek { width: 36px; padding-right: 0; }
 .tbl tr.ditagih td { background: #f3fbf7; }
 .switch { position: relative; display: inline-block; width: 36px; height: 20px; vertical-align: middle; }
