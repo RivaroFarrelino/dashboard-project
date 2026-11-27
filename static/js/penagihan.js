@@ -72,10 +72,10 @@ async function muatBanding(paksa = false) {
     $('k-pf').textContent = persen(pct);
     $('k-pf-bar').style.width = `${Math.min(100, pct)}%`;
     $('k-pf-rinci').innerHTML = `
-      <dt>FG jadi</dt><dd><b>${ringkas(nilai)}</b></dd>
-      <dt></dt><dd>${fmtAngka.format(Number(r.jml || 0))} item · ${fmtAngka.format(Number(r.jml_fppp || 0))} FPPP</dd>
-      <dt>Sudah di-PI</dt><dd><b>${ringkas(pi)}</b></dd>
-      <dt>Belum di-PI</dt><dd><b>${ringkas(Math.max(0, nilai - pi))}</b></dd>
+      <dt>Turun FP3</dt><dd><b>${ringkas(nilai)}</b></dd>
+      <dt></dt><dd>${fmtAngka.format(Number(r.jml_so || 0))} SO · ${fmtAngka.format(Number(r.jml_fppp || 0))} FPPP</dd>
+      <dt>Proforma</dt><dd><b>${ringkas(pi)}</b></dd>
+      <dt>Belum di-PI</dt><dd><b>${ringkas(Number(r.nilai_belum || 0))}</b></dd>
       <dt>Item ditagih</dt><dd>${fmtAngka.format(Number(r.jml_tagih || 0))} / ${fmtAngka.format(Number(r.jml || 0))} item</dd>`;
   } catch (e) {
     if (kunciBanding !== state.kunciBanding) return;
