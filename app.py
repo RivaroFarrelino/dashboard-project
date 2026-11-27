@@ -576,7 +576,7 @@ def _filter_penagihan(args):
             "AND l.document_no IN (SELECT pg.so_no FROM (" + SQL_PROGRES + ") pg WHERE "
             + " OR ".join(PROGRES[p] for p in progres) + ") "
         )
-        params += [BRAND, BRAND]
+        params.append(BRAND)
     return where, params
 
 
@@ -652,11 +652,9 @@ SQL_PI_SO = (
 
 
 SQL_PROGRES = (
-    "SELECT fg.so_no, IF(COALESCE(pi.amt, 0) >= fg.nilai - 1, 100, LEAST(100, COALESCE(pi.amt, 0) / fg.nilai * 100)) AS pct "
+    "SELECT fg.so_no, IF(ABS(COALESCE(pi.amt, 0) - fg.nilai) <= 1, 100, COALESCE(pi.amt, 0) / fg.nilai * 100) AS pct "
     "FROM (SELECT l.document_no AS so_no, SUM(l.line_amount) AS nilai FROM bc_sales_line l "
-    "JOIN " + FPPP_STAT + " ON f.so_no = l.document_no AND f.fk = " + FPPP_KODE + " "
-    "LEFT JOIN app_fg_tagih t ON t.so_no = l.document_no AND t.line_no = l.line_no "
-    "WHERE " + FG_COND + " AND (t.is_ticked = 1 OR f.n_ok = f.n) GROUP BY l.document_no HAVING nilai > 0) fg "
+    "WHERE " + FG_COND + " GROUP BY l.document_no HAVING nilai > 0) fg "
     "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = fg.so_no"
 )
 PROGRES = {
@@ -673,7 +671,7 @@ def _progres_so(so_list):
     tanda = ", ".join(["%s"] * len(so_list))
     return {r["so_no"]: float(r["pct"] or 0) for r in db.query(
         "SELECT so_no, pct FROM (" + SQL_PROGRES + ") pg WHERE so_no IN (" + tanda + ")",
-        [BRAND, BRAND] + so_list,
+        [BRAND] + so_list,
     )}
 
 
