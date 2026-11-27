@@ -9,26 +9,23 @@
 
 <section id="pesan" class="alert" hidden></section>
 
-<div class="filter-bar card">
-  <div class="search search-sm">
-    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-    <input id="f-cari" type="search" placeholder="Cari SO, project, customer, item, FPPP, kode opening/unit">
+<div class="saring">
+  <div class="saring-atas">
+    <div class="saring-cari">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="f-cari" type="search" autocomplete="off" placeholder="Cari SO, project, customer, item, FPPP, kode opening/unit">
+    </div>
+    <div class="segmen" id="f-status" role="tablist">
+      <button data-v="belum" class="aktif">Belum ditagih</button>
+      <button data-v="sudah">Sudah ditagih</button>
+      <button data-v="semua">Semua</button>
+    </div>
+    <button type="button" class="btn-filter" id="btn-filter" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      Filter<span class="btn-filter-n" id="f-n" hidden></span>
+    </button>
   </div>
-  <div class="segmen" id="f-status" role="tablist">
-    <button data-v="belum" class="aktif">Belum ditagih</button>
-    <button data-v="sudah">Sudah ditagih</button>
-    <button data-v="semua">Semua</button>
-  </div>
-  <label class="select-wrap inline">
-    <span class="muted small">FPPP selesai</span>
-    <select id="f-periode">
-      <option value="30">30 hari terakhir</option>
-      <option value="90" selected>90 hari terakhir</option>
-      <option value="180">180 hari terakhir</option>
-      <option value="tahun">Tahun ini</option>
-      <option value="semua">Semua</option>
-    </select>
-  </label>
+  <div class="saring-aktif" id="f-aktif" hidden></div>
 </div>
 
 <div class="kpi-grid kpi-4">
@@ -50,6 +47,31 @@
       <button class="btn-sm" id="btn-next">Berikutnya ›</button>
     </div>
   </div>
+</div>
+
+<div class="laci" id="laci" hidden>
+  <div class="laci-latar" data-tutup-laci></div>
+  <aside class="laci-panel" role="dialog" aria-modal="true" aria-labelledby="laci-judul">
+    <div class="laci-head">
+      <span class="laci-pegangan" aria-hidden="true"></span>
+      <h2 id="laci-judul">Filter</h2>
+      <button type="button" class="btn-icon" id="laci-tutup" data-tutup-laci aria-label="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="laci-isi">
+      <section class="grup-saring">
+        <h4>Proforma vs FG jadi</h4>
+        <div class="chips" id="c-progres" data-f="progres"></div>
+      </section>
+      <section class="grup-saring">
+        <h4>Tanggal output</h4>
+        <div class="chips" id="c-periode" data-f="periode"></div>
+      </section>
+    </div>
+    <div class="laci-kaki">
+      <button type="button" class="link-hapus" id="laci-hapus">Hapus filter</button>
+      <button type="button" class="btn-gelap" id="laci-terap">Tampilkan SO</button>
+    </div>
+  </aside>
 </div>
 
 <div class="modal" id="m-tagih" hidden>
