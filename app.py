@@ -577,6 +577,13 @@ def _filter_penagihan(args):
             + " OR ".join(PROGRES[p] for p in progres) + ") "
         )
         params.append(BRAND)
+    kontrak = [p for p in str(args.get("kontrak", "")).split(",") if p in PROGRES_KONTRAK]
+    if kontrak:
+        where += (
+            "AND l.document_no IN (SELECT pk.so_no FROM (" + SQL_PROGRES_KONTRAK + ") pk WHERE "
+            + " OR ".join(PROGRES_KONTRAK[p] for p in kontrak) + ") "
+        )
+        params.append(BRAND)
     return where, params
 
 
@@ -631,12 +638,10 @@ def api_penagihan():
             params + so_list,
         )
     proforma = _proforma_so(so_list)
-    progres = _progres_so(so_list)
     urutan = {so: i for i, so in enumerate(so_list)}
     rows.sort(key=lambda r: urutan.get(r["so_no"], 0))
     for r in rows:
         r["proforma"] = proforma.get(r["so_no"], [])
-        r["progres"] = progres.get(r["so_no"])
     return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN_SO, rows=rows)
 
 
@@ -657,22 +662,26 @@ SQL_PROGRES = (
     "WHERE " + FG_COND + " GROUP BY l.document_no HAVING nilai > 0) fg "
     "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = fg.so_no"
 )
+SQL_PROGRES_KONTRAK = (
+    "SELECT h.no AS so_no, IF(ABS(COALESCE(pi.amt, 0) - h.contract_amount) <= 1, 100, "
+    "COALESCE(pi.amt, 0) / h.contract_amount * 100) AS pct "
+    "FROM bc_sales_header h LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = h.no "
+    "WHERE h.brand = %s AND h.contract_amount > 0"
+)
+PROGRES_KONTRAK = {
+    "0": "pk.pct < 1",
+    "30": "(pk.pct >= 1 AND pk.pct < 50)",
+    "50": "(pk.pct >= 50 AND pk.pct < 70)",
+    "70": "(pk.pct >= 70 AND pk.pct < 100)",
+    "100": "pk.pct = 100",
+    "lebih": "pk.pct > 100",
+}
 PROGRES = {
     "lt50": "pg.pct < 50",
     "50_85": "(pg.pct >= 50 AND pg.pct < 85)",
     "85_99": "(pg.pct >= 85 AND pg.pct < 100)",
     "100": "pg.pct >= 100",
 }
-
-
-def _progres_so(so_list):
-    if not so_list:
-        return {}
-    tanda = ", ".join(["%s"] * len(so_list))
-    return {r["so_no"]: float(r["pct"] or 0) for r in db.query(
-        "SELECT so_no, pct FROM (" + SQL_PROGRES + ") pg WHERE so_no IN (" + tanda + ")",
-        [BRAND] + so_list,
-    )}
 
 
 @app.get("/api/penagihan/banding")
@@ -682,12 +691,15 @@ def api_penagihan_banding():
         "SELECT COUNT(*) AS jml_so, COALESCE(SUM(x.jml), 0) AS jml, COALESCE(SUM(x.jml_tagih), 0) AS jml_tagih, "
         "COALESCE(SUM(x.n_fppp), 0) AS jml_fppp, COALESCE(SUM(fp.nilai), 0) AS nilai, "
         "COALESCE(SUM(COALESCE(pi.amt, 0)), 0) AS nilai_pi, "
-        "COALESCE(SUM(GREATEST(0, fp.nilai - COALESCE(pi.amt, 0))), 0) AS nilai_belum "
+        "COALESCE(SUM(GREATEST(0, fp.nilai - COALESCE(pi.amt, 0))), 0) AS nilai_belum, "
+        "COALESCE(SUM(h.contract_amount), 0) AS kontrak, "
+        "COALESCE(SUM(GREATEST(0, h.contract_amount - COALESCE(pi.amt, 0))), 0) AS kontrak_belum "
         "FROM (SELECT l.document_no AS so_no, COUNT(*) AS jml, SUM(t.is_ticked = 1) AS jml_tagih, "
         "COUNT(DISTINCT " + FPPP_KODE + ") AS n_fppp "
         + FROM_PENAGIHAN + where + FILTER_STATUS["semua"] + "GROUP BY l.document_no) x "
         "JOIN (SELECT l.document_no AS so_no, SUM(l.line_amount) AS nilai FROM bc_sales_line l "
         "WHERE " + FG_COND + " GROUP BY l.document_no) fp ON fp.so_no = x.so_no "
+        "JOIN bc_sales_header h ON h.no = x.so_no "
         "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = x.so_no",
         params + [BRAND],
     )
