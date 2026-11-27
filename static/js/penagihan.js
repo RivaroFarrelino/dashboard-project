@@ -352,7 +352,6 @@ function renderKonfirmasi(data) {
     <div class="tagih-so" data-so="${esc(so.so_no)}" data-item="${Number(so.subtotal)}" data-sisa="${Number(so.sisa)}">
       <div class="tagih-so-head">
         <div class="tagih-so-judul"><b>${esc(so.so_no)}</b>${so.project_code ? `<span class="muted">${esc(so.project_code)}</span>` : ''}
-          <label class="tagih-tipe"><span class="muted small">Tipe</span><select data-tipe>${['Phase', 'Final'].map(t => `<option ${t === so.tipe_usul ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
           <span class="muted small">${esc(so.ext_doc_usul || '')}</span></div>
         <dl class="tagih-meta">
           <div><dt>Customer</dt><dd>${teks(so.customer)}</dd></div>
@@ -417,11 +416,8 @@ async function bukaKonfirmasi(rows) {
 
 async function simpanKonfirmasi(buatPi) {
   const total = {};
-  const tipe = {};
   document.querySelectorAll('#m-tagih-isi [data-so]').forEach(b => {
     total[b.dataset.so] = Math.round(totalSo(b));
-    const sel = b.querySelector('select[data-tipe]');
-    if (sel) tipe[b.dataset.so] = sel.value;
   });
   const kunciItem = new Set(konfirmasi.data.so.flatMap(so => so.items.map(it => `${it.so_no}|${it.line_no}`)));
   const rows = konfirmasi.rows.filter(r => kunciItem.has(kunci(r)));
@@ -430,7 +426,7 @@ async function simpanKonfirmasi(buatPi) {
   tombol.forEach(t => { t.disabled = true; });
   if (buatPi) $('m-tagih-simpan').textContent = 'Membuat proforma…';
   try {
-    const hasil = await simpan(rows, true, total, buatPi ? { buat_pi: true, tipe } : {});
+    const hasil = await simpan(rows, true, total, buatPi ? { buat_pi: true } : {});
     const pi = (hasil.proforma || []).map(p => p.pi_no);
     const gagal = hasil.gagal || [];
     if (gagal.length) {
