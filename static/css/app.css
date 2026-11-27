@@ -732,9 +732,4 @@ body.ada-aksi .pager { margin-bottom: 72px; }
 @media (max-width: 720px) { .pf-form { grid-template-columns: 1fr; } }
 
 .saring-atas .segmen { flex-shrink: 0; }
-.pill-progres { display: table; margin-top: 4px; padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.pill-progres.p-0 { background: #fdecec; color: #b42318; }
-.pill-progres.p-50 { background: #fff4e0; color: #a15c00; }
-.pill-progres.p-85 { background: #e8f0ff; color: #2f5bd3; }
-.pill-progres.p-100 { background: #e6f6ee; color: #18794e; }
 @media (max-width: 860px) { .saring-atas { flex-wrap: wrap; } .saring-atas .saring-cari { flex-basis: 100%; max-width: none; } }
