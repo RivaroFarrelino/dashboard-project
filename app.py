@@ -570,18 +570,12 @@ def _filter_penagihan(args):
             "OR i.kode_opening LIKE %s OR i.kode_unit LIKE %s) "
         )
         params += [like] * 11
-    progres = [p for p in str(args.get("progres", "")).split(",") if p in PROGRES]
-    if progres:
+    persen = [p for p in str(args.get("persen", "")).split(",") if p in PERSEN]
+    if persen:
+        sumber = SQL_PROGRES_KONTRAK if args.get("dasar") == "kontrak" else SQL_PROGRES
         where += (
-            "AND l.document_no IN (SELECT pg.so_no FROM (" + SQL_PROGRES + ") pg WHERE "
-            + " OR ".join(PROGRES[p] for p in progres) + ") "
-        )
-        params.append(BRAND)
-    kontrak = [p for p in str(args.get("kontrak", "")).split(",") if p in PROGRES_KONTRAK]
-    if kontrak:
-        where += (
-            "AND l.document_no IN (SELECT pk.so_no FROM (" + SQL_PROGRES_KONTRAK + ") pk WHERE "
-            + " OR ".join(PROGRES_KONTRAK[p] for p in kontrak) + ") "
+            "AND l.document_no IN (SELECT pg.so_no FROM (" + sumber + ") pg WHERE "
+            + " OR ".join(PERSEN[p] for p in persen) + ") "
         )
         params.append(BRAND)
     return where, params
@@ -668,19 +662,13 @@ SQL_PROGRES_KONTRAK = (
     "FROM bc_sales_header h LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = h.no "
     "WHERE h.brand = %s AND h.contract_amount > 0"
 )
-PROGRES_KONTRAK = {
-    "0": "pk.pct < 1",
-    "30": "(pk.pct >= 1 AND pk.pct < 50)",
-    "50": "(pk.pct >= 50 AND pk.pct < 70)",
-    "70": "(pk.pct >= 70 AND pk.pct < 100)",
-    "100": "pk.pct = 100",
-    "lebih": "pk.pct > 100",
-}
-PROGRES = {
-    "lt50": "pg.pct < 50",
-    "50_85": "(pg.pct >= 50 AND pg.pct < 85)",
-    "85_99": "(pg.pct >= 85 AND pg.pct < 100)",
-    "100": "pg.pct >= 100",
+PERSEN = {
+    "0": "pg.pct < 1",
+    "30": "(pg.pct >= 1 AND pg.pct < 50)",
+    "50": "(pg.pct >= 50 AND pg.pct < 70)",
+    "70": "(pg.pct >= 70 AND pg.pct < 100)",
+    "100": "pg.pct = 100",
+    "lebih": "pg.pct > 100",
 }
 
 
