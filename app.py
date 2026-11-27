@@ -645,28 +645,17 @@ def api_penagihan():
     return jsonify(ringkas=ringkas, total=total, halaman=halaman, ukuran=UKURAN_HALAMAN_SO, rows=rows)
 
 
-SQL_PI_SO = (
-    "SELECT so_no, SUM(amt) AS amt FROM ("
-    "SELECT h.nomor_so AS so_no, COALESCE(SUM(pl.line_amount), 0) AS amt, MAX(h.is_batal) AS batal "
-    "FROM bc_proforma_header h LEFT JOIN bc_proforma_line pl ON pl.document_no = h.no "
-    "WHERE h.missing_in_bc_since IS NULL GROUP BY h.no, h.nomor_so "
-    "UNION ALL SELECT so_no, amount, 0 FROM app_proforma WHERE status = 'DIBUAT' "
-    "AND pi_no NOT IN (SELECT no FROM bc_proforma_header WHERE missing_in_bc_since IS NULL)"
-    ") x WHERE NOT (x.batal = 1 AND x.amt >= 0) GROUP BY so_no"
-)
-
-
 SQL_PROGRES = (
-    "SELECT fg.so_no, IF(ABS(COALESCE(pi.amt, 0) - fg.nilai) <= 1, 100, COALESCE(pi.amt, 0) / fg.nilai * 100) AS pct "
+    "SELECT fg.so_no, IF(ABS(COALESCE(h.proforma_amount_created, 0) - fg.nilai) <= 1, 100, "
+    "COALESCE(h.proforma_amount_created, 0) / fg.nilai * 100) AS pct "
     "FROM (SELECT l.document_no AS so_no, SUM(l.line_amount) AS nilai FROM bc_sales_line l "
     "WHERE " + FG_COND + " GROUP BY l.document_no HAVING nilai > 0) fg "
-    "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = fg.so_no"
+    "JOIN bc_sales_header h ON h.no = fg.so_no"
 )
 SQL_PROGRES_KONTRAK = (
-    "SELECT h.no AS so_no, IF(ABS(COALESCE(pi.amt, 0) - h.contract_amount) <= 1, 100, "
-    "COALESCE(pi.amt, 0) / h.contract_amount * 100) AS pct "
-    "FROM bc_sales_header h LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = h.no "
-    "WHERE h.brand = %s AND h.contract_amount > 0"
+    "SELECT h.no AS so_no, IF(ABS(COALESCE(h.proforma_amount_created, 0) - h.contract_amount) <= 1, 100, "
+    "COALESCE(h.proforma_amount_created, 0) / h.contract_amount * 100) AS pct "
+    "FROM bc_sales_header h WHERE h.brand = %s AND h.contract_amount > 0"
 )
 PROGRES = {
     "100": "pg.pct >= 100",
@@ -690,17 +679,16 @@ def api_penagihan_banding():
     r = db.query_one(
         "SELECT COUNT(*) AS jml_so, COALESCE(SUM(x.jml), 0) AS jml, COALESCE(SUM(x.jml_tagih), 0) AS jml_tagih, "
         "COALESCE(SUM(x.n_fppp), 0) AS jml_fppp, COALESCE(SUM(fp.nilai), 0) AS nilai, "
-        "COALESCE(SUM(COALESCE(pi.amt, 0)), 0) AS nilai_pi, "
-        "COALESCE(SUM(GREATEST(0, fp.nilai - COALESCE(pi.amt, 0))), 0) AS nilai_belum, "
+        "COALESCE(SUM(COALESCE(h.proforma_amount_created, 0)), 0) AS nilai_pi, "
+        "COALESCE(SUM(GREATEST(0, fp.nilai - COALESCE(h.proforma_amount_created, 0))), 0) AS nilai_belum, "
         "COALESCE(SUM(h.contract_amount), 0) AS kontrak, "
-        "COALESCE(SUM(GREATEST(0, h.contract_amount - COALESCE(pi.amt, 0))), 0) AS kontrak_belum "
+        "COALESCE(SUM(GREATEST(0, h.contract_amount - COALESCE(h.proforma_amount_created, 0))), 0) AS kontrak_belum "
         "FROM (SELECT l.document_no AS so_no, COUNT(*) AS jml, SUM(t.is_ticked = 1) AS jml_tagih, "
         "COUNT(DISTINCT " + FPPP_KODE + ") AS n_fppp "
         + FROM_PENAGIHAN + where + FILTER_STATUS["semua"] + "GROUP BY l.document_no) x "
         "JOIN (SELECT l.document_no AS so_no, SUM(l.line_amount) AS nilai FROM bc_sales_line l "
         "WHERE " + FG_COND + " GROUP BY l.document_no) fp ON fp.so_no = x.so_no "
-        "JOIN bc_sales_header h ON h.no = x.so_no "
-        "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = x.so_no",
+        "JOIN bc_sales_header h ON h.no = x.so_no",
         params + [BRAND],
     )
     return jsonify(r)
