@@ -888,7 +888,7 @@ def _posisi_kontrak(so_list):
         kontrak = float((header.get(so_no) or {}).get("kontrak") or 0) * k
         c = calc.get(so_no) or {}
         cash = float(c.get("paid") or 0)
-        terpakai = max(cash, pi.get(so_no, 0) * k, dp.get(so_no, 0) + sudah.get(so_no, 0))
+        terpakai = max(cash, pi.get(so_no, 0) * k)
         hasil[so_no] = {"kontrak": kontrak, "cash": cash, "persen_dp": float(c.get("persen_dp") or 0),
                         "dp": dp.get(so_no, 0), "sudah": sudah.get(so_no, 0), "pi": pi.get(so_no, 0) * k,
                         "sisa": float(max(0, round(kontrak - terpakai)))}
