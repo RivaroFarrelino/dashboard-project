@@ -86,7 +86,7 @@ async function muatBanding(paksa = false) {
 }
 
 const FILTER_AWAL = { periode: '90' };
-const PROGRES = [['lt50', '< 50%'], ['50_85', '50–85%'], ['85_99', '85–99%'], ['100', '100%']];
+const PROGRES = [['lt50', '< 50%'], ['50_85', '50–85%'], ['85_99', '85–99%'], ['100', '≥ 100%']];
 const LABEL_PROGRES = Object.fromEntries(PROGRES);
 const PERIODE = [['30', '30 hari'], ['90', '90 hari'], ['180', '180 hari'], ['tahun', 'Tahun ini'], ['semua', 'Semua']];
 const LABEL_PERIODE = Object.fromEntries(PERIODE);
