@@ -948,7 +948,6 @@ def api_penagihan_tandai():
     oleh = g.user["username"]
     batch = datetime.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3)
     buat_pi = tagih and bool(data.get("buat_pi"))
-    tipe_so = data.get("tipe") if isinstance(data.get("tipe"), dict) else {}
     proforma, gagal = [], []
     posisi = _posisi_kontrak(list(dict.fromkeys(b["so_no"] for b in ubah))) if tagih else {}
     if buat_pi and ubah:
@@ -966,7 +965,8 @@ def api_penagihan_tandai():
                 continue
             if amount > posisi.get(so_no, {}).get("sisa", 0) + 1:
                 return jsonify(pesan=f"Tagihan {so_no} melebihi sisa kontrak."), 400
-            tipe = tipe_so.get(so_no) if tipe_so.get(so_no) in PI_TIPE else usul[so_no]["tipe"]
+            lunas_kontrak = amount >= posisi.get(so_no, {}).get("sisa", 0) - 1
+            tipe = "Final" if usul[so_no]["tipe"] == "Final" and lunas_kontrak else "Phase"
             hasil = _buat_proforma(so_no, usul[so_no], amount, tipe, batch, oleh)
             if hasil["ok"]:
                 proforma.append({"so_no": so_no, "pi_no": hasil["pi_no"]})
