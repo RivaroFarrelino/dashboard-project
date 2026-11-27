@@ -733,4 +733,3 @@ body.ada-aksi .pager { margin-bottom: 72px; }
 
 .saring-atas .segmen { flex-shrink: 0; }
 @media (max-width: 860px) { .saring-atas { flex-wrap: wrap; } .saring-atas .saring-cari { flex-basis: 100%; max-width: none; } }
-.chips-persen { margin-top: 10px; }
