@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { kunciBanding: null, status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaFp: new Set(), bukaOp: new Set() };
+const state = { f: { periode: '90', progres: [] }, draf: null, noHitung: 0, timerHitung: null, kunciBanding: null, status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaFp: new Set(), bukaOp: new Set() };
 
 const kunci = r => `${r.so_no}|${r.line_no}`;
 
@@ -22,7 +22,8 @@ async function muat() {
   const params = new URLSearchParams({
     q: $('f-cari').value.trim(),
     status: state.status,
-    periode: $('f-periode').value,
+    periode: state.f.periode,
+    progres: state.f.progres.join(','),
     halaman: state.halaman
   });
   tampilPesan('');
@@ -59,7 +60,7 @@ function renderRingkas() {
 }
 
 async function muatBanding(paksa = false) {
-  const params = new URLSearchParams({ q: $('f-cari').value.trim(), periode: $('f-periode').value });
+  const params = new URLSearchParams({ q: $('f-cari').value.trim(), periode: state.f.periode, progres: state.f.progres.join(',') });
   const kunciBanding = params.toString();
   if (!paksa && kunciBanding === state.kunciBanding) return;
   state.kunciBanding = kunciBanding;
@@ -82,6 +83,97 @@ async function muatBanding(paksa = false) {
     $('k-pf').textContent = '–';
     $('k-pf-rinci').innerHTML = '';
   }
+}
+
+const FILTER_AWAL = { periode: '90' };
+const PROGRES = [['lt50', '< 50%'], ['50_85', '50–85%'], ['85_99', '85–99%'], ['100', '100%']];
+const LABEL_PROGRES = Object.fromEntries(PROGRES);
+const PERIODE = [['30', '30 hari'], ['90', '90 hari'], ['180', '180 hari'], ['tahun', 'Tahun ini'], ['semua', 'Semua']];
+const LABEL_PERIODE = Object.fromEntries(PERIODE);
+const IKON_X = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const kelasProgres = v => (v >= 100 ? 'p-100' : v >= 85 ? 'p-85' : v >= 50 ? 'p-50' : 'p-0');
+const jumlahFilter = f => f.progres.length + (f.periode !== FILTER_AWAL.periode ? 1 : 0);
+const chipF = (nilai, label, aktif) => `<button type="button" class="chip-f${aktif ? ' aktif' : ''}" data-v="${esc(nilai)}" aria-pressed="${aktif}">${esc(label)}</button>`;
+
+function isiFilterUi() {
+  const f = state.f;
+  const n = jumlahFilter(f);
+  $('f-n').textContent = n;
+  $('f-n').hidden = !n;
+  $('btn-filter').classList.toggle('ada', n > 0);
+  const pil = [];
+  if (f.periode !== FILTER_AWAL.periode) pil.push(['periode', `Output: ${LABEL_PERIODE[f.periode].toLowerCase()}`]);
+  f.progres.forEach(p => pil.push([p, `Proforma ${LABEL_PROGRES[p]}`]));
+  $('f-aktif').innerHTML = pil.map(([k, label]) =>
+    `<button type="button" class="pil-aktif" data-hapus="${esc(k)}" aria-label="Hapus filter ${esc(label)}">${esc(label)}${IKON_X}</button>`
+  ).join('') + (pil.length ? '<button type="button" class="link-hapus" data-hapus="semua">Hapus semua</button>' : '');
+  $('f-aktif').hidden = !pil.length;
+}
+
+function terapkanFilter() {
+  state.halaman = 1;
+  isiFilterUi();
+  muat();
+}
+
+function renderLaci() {
+  const d = state.draf;
+  $('c-progres').innerHTML = PROGRES.map(([v, l]) => chipF(v, l, d.progres.includes(v))).join('');
+  $('c-periode').innerHTML = PERIODE.map(([v, l]) => chipF(v, l, d.periode === v)).join('');
+  $('laci-hapus').disabled = !jumlahFilter(d);
+}
+
+function hitungDraf() {
+  clearTimeout(state.timerHitung);
+  const no = ++state.noHitung;
+  $('laci-terap').classList.add('menghitung');
+  state.timerHitung = setTimeout(async () => {
+    const p = new URLSearchParams({ q: $('f-cari').value.trim(), status: state.status, periode: state.draf.periode, progres: state.draf.progres.join(','), hitung: '1' });
+    try {
+      const data = await ambilJson(`/api/penagihan?${p}`);
+      if (no !== state.noHitung) return;
+      const n = Number(data.total || 0);
+      $('laci-terap').textContent = n ? `Tampilkan ${fmtAngka.format(n)} SO` : 'Tidak ada SO';
+      $('laci-terap').disabled = !n;
+    } catch (e) {
+      if (no !== state.noHitung) return;
+      $('laci-terap').textContent = 'Tampilkan SO';
+      $('laci-terap').disabled = false;
+    } finally {
+      if (no === state.noHitung) $('laci-terap').classList.remove('menghitung');
+    }
+  }, 200);
+}
+
+function bukaLaci() {
+  state.draf = { periode: state.f.periode, progres: [...state.f.progres] };
+  renderLaci();
+  const total = state.data ? Number(state.data.total || 0) : 0;
+  $('laci-terap').textContent = total ? `Tampilkan ${fmtAngka.format(total)} SO` : 'Tampilkan SO';
+  $('laci-terap').disabled = false;
+  const laci = $('laci');
+  laci.hidden = false;
+  laci.offsetHeight;
+  laci.classList.add('buka');
+  document.body.style.overflow = 'hidden';
+  $('laci-tutup').focus();
+}
+
+function tutupLaci() {
+  const laci = $('laci');
+  if (laci.hidden) return;
+  laci.classList.remove('buka');
+  document.body.style.overflow = '';
+  setTimeout(() => { if (!laci.classList.contains('buka')) laci.hidden = true; }, 220);
+  $('btn-filter').focus();
+}
+
+function ubahDraf(k, v) {
+  const d = state.draf;
+  if (k === 'progres') d.progres = d.progres.includes(v) ? d.progres.filter(x => x !== v) : [...d.progres, v];
+  else d.periode = v;
+  renderLaci();
+  hitungDraf();
 }
 
 function daftarPi(list) {
@@ -226,7 +318,7 @@ function renderTabel() {
           <div class="fg-judul">${SVG_PANAH}<div><b>${esc(g.so)}</b> <button type="button" class="btn-riwayat" data-riwayat="${esc(g.so)}">Riwayat</button><div class="small muted">${g.info.project_code ? `<a href="/project?kode=${encodeURIComponent(g.info.project_code)}">${esc(g.info.project_code)}</a>` : ''} ${teks(g.info.quo)}</div></div></div>
           ${sel('wrap', teks(g.info.customer))}
           ${sel('', teks(g.info.top))}
-          ${sel('', daftarPi(g.info.proforma))}
+          ${sel('', `${daftarPi(g.info.proforma)}${g.info.progres == null ? '' : `<span class="pill-progres ${kelasProgres(g.info.progres)}">${persen(Math.floor(g.info.progres))}</span>`}`)}
           ${sel('num', `${rg.n} item<div class="small muted">${g.fps.length} FPPP · ${g.nOp} opening</div>`)}
           ${sel('num', angka(rg.nilai))}
           ${sel('num fg-tagih', statusTagih(rg))}
@@ -529,7 +621,32 @@ async function aksiMassal(tagih) {
 document.addEventListener('DOMContentLoaded', () => {
   let t = null;
   $('f-cari').addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { state.halaman = 1; muat(); }, 350); });
-  $('f-periode').addEventListener('change', () => { state.halaman = 1; muat(); });
+  $('btn-filter').addEventListener('click', bukaLaci);
+  $('f-aktif').addEventListener('click', e => {
+    const b = e.target.closest('[data-hapus]');
+    if (!b) return;
+    const k = b.dataset.hapus;
+    if (k === 'semua') state.f = { ...FILTER_AWAL, progres: [] };
+    else if (k === 'periode') state.f.periode = FILTER_AWAL.periode;
+    else state.f.progres = state.f.progres.filter(x => x !== k);
+    terapkanFilter();
+  });
+  $('laci').addEventListener('click', e => {
+    if (e.target.closest('[data-tutup-laci]')) { tutupLaci(); return; }
+    const c = e.target.closest('.chip-f');
+    if (c) ubahDraf(c.parentElement.dataset.f, c.dataset.v);
+  });
+  $('laci-hapus').addEventListener('click', () => {
+    state.draf = { ...FILTER_AWAL, progres: [] };
+    renderLaci();
+    hitungDraf();
+  });
+  $('laci-terap').addEventListener('click', () => {
+    state.f = { periode: state.draf.periode, progres: [...state.draf.progres] };
+    tutupLaci();
+    terapkanFilter();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('laci').hidden) tutupLaci(); });
   $('f-status').addEventListener('click', e => {
     const b = e.target.closest('button[data-v]');
     if (!b) return;
@@ -595,5 +712,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (so) toggle(state.bukaSo, so.dataset.toggleSo, so.closest('.fg-so'), '.fg-so-isi');
   });
 
+  isiFilterUi();
   muat();
 });
