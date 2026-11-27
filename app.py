@@ -678,21 +678,18 @@ def _progres_so(so_list):
 @app.get("/api/penagihan/banding")
 def api_penagihan_banding():
     where, params = _filter_penagihan(request.args)
-    awal = "WHERE " + FG_COND + " "
-    syarat = "(1 = 1 " + where[len(awal):] + ")"
-    ekstra = params[2:]
     r = db.query_one(
-        "SELECT COUNT(*) AS jml_so, COALESCE(SUM(fg.jml), 0) AS jml, COALESCE(SUM(fg.jml_tagih), 0) AS jml_tagih, "
-        "COALESCE(SUM(fg.n_fppp), 0) AS jml_fppp, COALESCE(SUM(fg.nilai), 0) AS nilai, "
-        "COALESCE(SUM(LEAST(fg.nilai, GREATEST(0, COALESCE(pi.amt, 0) - (fg.nilai_semua - fg.nilai)))), 0) AS nilai_pi "
-        "FROM (SELECT l.document_no AS so_no, SUM(l.line_amount) AS nilai_semua, "
-        "SUM(IF(" + syarat + ", l.line_amount, 0)) AS nilai, SUM(" + syarat + ") AS jml, "
-        "SUM(" + syarat + " AND t.is_ticked = 1) AS jml_tagih, "
-        "COUNT(DISTINCT IF(" + syarat + ", " + FPPP_KODE + ", NULL)) AS n_fppp "
-        + FROM_PENAGIHAN + awal + FILTER_STATUS["semua"] +
-        "GROUP BY l.document_no HAVING jml > 0) fg "
-        "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = fg.so_no",
-        ekstra * 4 + [BRAND, BRAND],
+        "SELECT COUNT(*) AS jml_so, COALESCE(SUM(x.jml), 0) AS jml, COALESCE(SUM(x.jml_tagih), 0) AS jml_tagih, "
+        "COALESCE(SUM(x.n_fppp), 0) AS jml_fppp, COALESCE(SUM(fp.nilai), 0) AS nilai, "
+        "COALESCE(SUM(COALESCE(pi.amt, 0)), 0) AS nilai_pi, "
+        "COALESCE(SUM(GREATEST(0, fp.nilai - COALESCE(pi.amt, 0))), 0) AS nilai_belum "
+        "FROM (SELECT l.document_no AS so_no, COUNT(*) AS jml, SUM(t.is_ticked = 1) AS jml_tagih, "
+        "COUNT(DISTINCT " + FPPP_KODE + ") AS n_fppp "
+        + FROM_PENAGIHAN + where + FILTER_STATUS["semua"] + "GROUP BY l.document_no) x "
+        "JOIN (SELECT l.document_no AS so_no, SUM(l.line_amount) AS nilai FROM bc_sales_line l "
+        "WHERE " + FG_COND + " GROUP BY l.document_no) fp ON fp.so_no = x.so_no "
+        "LEFT JOIN (" + SQL_PI_SO + ") pi ON pi.so_no = x.so_no",
+        params + [BRAND],
     )
     return jsonify(r)
 
