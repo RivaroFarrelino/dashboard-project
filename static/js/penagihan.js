@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { f: { periode: '90', progres: [] }, draf: null, noHitung: 0, timerHitung: null, kunciBanding: null, status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaFp: new Set(), bukaOp: new Set() };
+const state = { f: { periode: '90', progres: [], kontrak: [] }, draf: null, noHitung: 0, timerHitung: null, kunciBanding: null, status: 'belum', halaman: 1, data: null, pilih: new Set(), urut: 0, bukaSo: new Set(), bukaFp: new Set(), bukaOp: new Set() };
 
 const kunci = r => `${r.so_no}|${r.line_no}`;
 
@@ -24,6 +24,7 @@ async function muat() {
     status: state.status,
     periode: state.f.periode,
     progres: state.f.progres.join(','),
+    kontrak: state.f.kontrak.join(','),
     halaman: state.halaman
   });
   tampilPesan('');
@@ -60,7 +61,7 @@ function renderRingkas() {
 }
 
 async function muatBanding(paksa = false) {
-  const params = new URLSearchParams({ q: $('f-cari').value.trim(), periode: state.f.periode, progres: state.f.progres.join(',') });
+  const params = new URLSearchParams({ q: $('f-cari').value.trim(), periode: state.f.periode, progres: state.f.progres.join(','), kontrak: state.f.kontrak.join(',') });
   const kunciBanding = params.toString();
   if (!paksa && kunciBanding === state.kunciBanding) return;
   state.kunciBanding = kunciBanding;
@@ -77,22 +78,34 @@ async function muatBanding(paksa = false) {
       <dt>Proforma</dt><dd><b>${ringkas(pi)}</b></dd>
       <dt>Belum di-PI</dt><dd><b>${ringkas(Number(r.nilai_belum || 0))}</b></dd>
       <dt>Item ditagih</dt><dd>${fmtAngka.format(Number(r.jml_tagih || 0))} / ${fmtAngka.format(Number(r.jml || 0))} item</dd>`;
+    const kontrak = Number(r.kontrak || 0);
+    const pctK = kontrak ? pi / kontrak * 100 : 0;
+    $('k-pk').textContent = persen(pctK);
+    $('k-pk-bar').style.width = `${Math.min(100, pctK)}%`;
+    $('k-pk-rinci').innerHTML = `
+      <dt>Kontrak</dt><dd><b>${ringkas(kontrak)}</b></dd>
+      <dt></dt><dd>${fmtAngka.format(Number(r.jml_so || 0))} SO</dd>
+      <dt>Proforma</dt><dd><b>${ringkas(pi)}</b></dd>
+      <dt>Belum di-PI</dt><dd><b>${ringkas(Number(r.kontrak_belum || 0))}</b></dd>`;
   } catch (e) {
     if (kunciBanding !== state.kunciBanding) return;
     state.kunciBanding = null;
     $('k-pf').textContent = '–';
     $('k-pf-rinci').innerHTML = '';
+    $('k-pk').textContent = '–';
+    $('k-pk-rinci').innerHTML = '';
   }
 }
 
 const FILTER_AWAL = { periode: '90' };
 const PROGRES = [['lt50', '< 50%'], ['50_85', '50–85%'], ['85_99', '85–99%'], ['100', '≥ 100%']];
 const LABEL_PROGRES = Object.fromEntries(PROGRES);
+const KONTRAK = [['0', '0%'], ['30', '30%'], ['50', '50%'], ['70', '70%'], ['100', '100%'], ['lebih', '> 100%']];
+const LABEL_KONTRAK = Object.fromEntries(KONTRAK);
 const PERIODE = [['30', '30 hari'], ['90', '90 hari'], ['180', '180 hari'], ['tahun', 'Tahun ini'], ['semua', 'Semua']];
 const LABEL_PERIODE = Object.fromEntries(PERIODE);
 const IKON_X = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-const kelasProgres = v => (v >= 100 ? 'p-100' : v >= 85 ? 'p-85' : v >= 50 ? 'p-50' : 'p-0');
-const jumlahFilter = f => f.progres.length + (f.periode !== FILTER_AWAL.periode ? 1 : 0);
+const jumlahFilter = f => f.progres.length + f.kontrak.length + (f.periode !== FILTER_AWAL.periode ? 1 : 0);
 const chipF = (nilai, label, aktif) => `<button type="button" class="chip-f${aktif ? ' aktif' : ''}" data-v="${esc(nilai)}" aria-pressed="${aktif}">${esc(label)}</button>`;
 
 function isiFilterUi() {
@@ -103,7 +116,8 @@ function isiFilterUi() {
   $('btn-filter').classList.toggle('ada', n > 0);
   const pil = [];
   if (f.periode !== FILTER_AWAL.periode) pil.push(['periode', `Output: ${LABEL_PERIODE[f.periode].toLowerCase()}`]);
-  f.progres.forEach(p => pil.push([p, `Proforma ${LABEL_PROGRES[p]}`]));
+  f.progres.forEach(p => pil.push([`fp3:${p}`, `FP3 ${LABEL_PROGRES[p]}`]));
+  f.kontrak.forEach(p => pil.push([`kontrak:${p}`, `Kontrak ${LABEL_KONTRAK[p]}`]));
   $('f-aktif').innerHTML = pil.map(([k, label]) =>
     `<button type="button" class="pil-aktif" data-hapus="${esc(k)}" aria-label="Hapus filter ${esc(label)}">${esc(label)}${IKON_X}</button>`
   ).join('') + (pil.length ? '<button type="button" class="link-hapus" data-hapus="semua">Hapus semua</button>' : '');
@@ -119,6 +133,7 @@ function terapkanFilter() {
 function renderLaci() {
   const d = state.draf;
   $('c-progres').innerHTML = PROGRES.map(([v, l]) => chipF(v, l, d.progres.includes(v))).join('');
+  $('c-kontrak').innerHTML = KONTRAK.map(([v, l]) => chipF(v, l, d.kontrak.includes(v))).join('');
   $('c-periode').innerHTML = PERIODE.map(([v, l]) => chipF(v, l, d.periode === v)).join('');
   $('laci-hapus').disabled = !jumlahFilter(d);
 }
@@ -128,7 +143,7 @@ function hitungDraf() {
   const no = ++state.noHitung;
   $('laci-terap').classList.add('menghitung');
   state.timerHitung = setTimeout(async () => {
-    const p = new URLSearchParams({ q: $('f-cari').value.trim(), status: state.status, periode: state.draf.periode, progres: state.draf.progres.join(','), hitung: '1' });
+    const p = new URLSearchParams({ q: $('f-cari').value.trim(), status: state.status, periode: state.draf.periode, progres: state.draf.progres.join(','), kontrak: state.draf.kontrak.join(','), hitung: '1' });
     try {
       const data = await ambilJson(`/api/penagihan?${p}`);
       if (no !== state.noHitung) return;
@@ -146,7 +161,7 @@ function hitungDraf() {
 }
 
 function bukaLaci() {
-  state.draf = { periode: state.f.periode, progres: [...state.f.progres] };
+  state.draf = { periode: state.f.periode, progres: [...state.f.progres], kontrak: [...state.f.kontrak] };
   renderLaci();
   const total = state.data ? Number(state.data.total || 0) : 0;
   $('laci-terap').textContent = total ? `Tampilkan ${fmtAngka.format(total)} SO` : 'Tampilkan SO';
@@ -170,7 +185,7 @@ function tutupLaci() {
 
 function ubahDraf(k, v) {
   const d = state.draf;
-  if (k === 'progres') d.progres = d.progres.includes(v) ? d.progres.filter(x => x !== v) : [...d.progres, v];
+  if (k === 'progres' || k === 'kontrak') d[k] = d[k].includes(v) ? d[k].filter(x => x !== v) : [...d[k], v];
   else d.periode = v;
   renderLaci();
   hitungDraf();
@@ -318,7 +333,7 @@ function renderTabel() {
           <div class="fg-judul">${SVG_PANAH}<div><b>${esc(g.so)}</b> <button type="button" class="btn-riwayat" data-riwayat="${esc(g.so)}">Riwayat</button><div class="small muted">${g.info.project_code ? `<a href="/project?kode=${encodeURIComponent(g.info.project_code)}">${esc(g.info.project_code)}</a>` : ''} ${teks(g.info.quo)}</div></div></div>
           ${sel('wrap', teks(g.info.customer))}
           ${sel('', teks(g.info.top))}
-          ${sel('', `${daftarPi(g.info.proforma)}${g.info.progres == null ? '' : `<span class="pill-progres ${kelasProgres(g.info.progres)}">${persen(Math.floor(g.info.progres))}</span>`}`)}
+          ${sel('', daftarPi(g.info.proforma))}
           ${sel('num', `${rg.n} item<div class="small muted">${g.fps.length} FPPP · ${g.nOp} opening</div>`)}
           ${sel('num', angka(rg.nilai))}
           ${sel('num fg-tagih', statusTagih(rg))}
@@ -626,9 +641,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const b = e.target.closest('[data-hapus]');
     if (!b) return;
     const k = b.dataset.hapus;
-    if (k === 'semua') state.f = { ...FILTER_AWAL, progres: [] };
+    if (k === 'semua') state.f = { ...FILTER_AWAL, progres: [], kontrak: [] };
     else if (k === 'periode') state.f.periode = FILTER_AWAL.periode;
-    else state.f.progres = state.f.progres.filter(x => x !== k);
+    else if (k.startsWith('fp3:')) state.f.progres = state.f.progres.filter(x => x !== k.slice(4));
+    else if (k.startsWith('kontrak:')) state.f.kontrak = state.f.kontrak.filter(x => x !== k.slice(8));
     terapkanFilter();
   });
   $('laci').addEventListener('click', e => {
@@ -637,12 +653,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (c) ubahDraf(c.parentElement.dataset.f, c.dataset.v);
   });
   $('laci-hapus').addEventListener('click', () => {
-    state.draf = { ...FILTER_AWAL, progres: [] };
+    state.draf = { ...FILTER_AWAL, progres: [], kontrak: [] };
     renderLaci();
     hitungDraf();
   });
   $('laci-terap').addEventListener('click', () => {
-    state.f = { periode: state.draf.periode, progres: [...state.draf.progres] };
+    state.f = { periode: state.draf.periode, progres: [...state.draf.progres], kontrak: [...state.draf.kontrak] };
     tutupLaci();
     terapkanFilter();
   });
